@@ -29,7 +29,9 @@ const mockCanvas = {
 }
 
 // Mock HTML Canvas Element
-global.HTMLCanvasElement = vi.fn(() => mockCanvas) as unknown as typeof HTMLCanvasElement
+global.HTMLCanvasElement = vi.fn(
+  () => mockCanvas
+) as unknown as typeof HTMLCanvasElement
 
 // Mock FileReader
 global.FileReader = vi.fn(() => ({

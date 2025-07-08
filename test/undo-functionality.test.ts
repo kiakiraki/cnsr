@@ -4,7 +4,13 @@ import { ref } from 'vue'
 describe('Undo Functionality', () => {
   let undoStack: { value: ImageData[] }
   let canUndo: { value: boolean }
-  let mockCanvas: { value: { width: number; height: number; getContext: () => CanvasRenderingContext2D } }
+  let mockCanvas: {
+    value: {
+      width: number
+      height: number
+      getContext: () => CanvasRenderingContext2D
+    }
+  }
   let mockCtx: CanvasRenderingContext2D | null
   let originalImageData: ImageData | null
   const MAX_UNDO_LEVELS = 64
@@ -76,7 +82,7 @@ describe('Undo Functionality', () => {
 
     const previousState = undoStack.value.pop()
     mockCtx.putImageData(previousState, 0, 0)
-    
+
     originalImageData = mockCtx.getImageData(
       0,
       0,
@@ -93,7 +99,7 @@ describe('Undo Functionality', () => {
 
     // Clear canvas and redraw original image
     mockCtx.putImageData(originalImageData, 0, 0)
-    
+
     // Reset undo stack
     undoStack.value = []
     canUndo.value = false
@@ -126,10 +132,10 @@ describe('Undo Functionality', () => {
     it('should remove oldest entries when exceeding limit', () => {
       const firstState = { data: 'first-state' }
       // Remove unused variable
-      
+
       // Manually add to test limit behavior
       undoStack.value.push(firstState)
-      
+
       // Fill stack to maximum
       for (let i = 0; i < MAX_UNDO_LEVELS; i++) {
         addToUndoStack({
@@ -208,7 +214,7 @@ describe('Undo Functionality', () => {
     it('should reset to original state', () => {
       applyProcessing('blackfill')
       applyProcessing('mosaic')
-      
+
       expect(undoStack.value.length).toBe(2)
       expect(canUndo.value).toBe(true)
 
@@ -296,7 +302,7 @@ describe('Undo Functionality', () => {
 
     it('should handle reset without canvas context', () => {
       mockCtx = null
-      
+
       // Should not throw error
       expect(() => resetToOriginal()).not.toThrow()
     })

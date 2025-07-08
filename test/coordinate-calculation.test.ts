@@ -1,7 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 describe('Coordinate Calculation', () => {
-  let mockCanvas: { value: { width: number; height: number; getBoundingClientRect: () => DOMRect } }
+  let mockCanvas: {
+    value: {
+      width: number
+      height: number
+      getBoundingClientRect: () => DOMRect
+    }
+  }
   let mockRect: DOMRect
 
   beforeEach(() => {
@@ -27,7 +33,16 @@ describe('Coordinate Calculation', () => {
   })
 
   // getEventPosition function extracted from ImageMosaic.vue
-  const getEventPosition = (event: MouseEvent | TouchEvent, canvas: { value: { width: number; height: number; getBoundingClientRect: () => DOMRect } }) => {
+  const getEventPosition = (
+    event: MouseEvent | TouchEvent,
+    canvas: {
+      value: {
+        width: number
+        height: number
+        getBoundingClientRect: () => DOMRect
+      }
+    }
+  ) => {
     const rect = canvas.value.getBoundingClientRect()
     const scaleX = canvas.value.width / rect.width
     const scaleY = canvas.value.height / rect.height
@@ -124,7 +139,12 @@ describe('Coordinate Calculation', () => {
   })
 
   describe('Selection Area Normalization', () => {
-    const normalizeSelection = (selection: { startX: number; startY: number; endX: number; endY: number }) => {
+    const normalizeSelection = (selection: {
+      startX: number
+      startY: number
+      endX: number
+      endY: number
+    }) => {
       const startX = Math.min(selection.startX, selection.endX)
       const startY = Math.min(selection.startY, selection.endY)
       const width = Math.abs(selection.endX - selection.startX)
@@ -231,7 +251,12 @@ describe('Coordinate Calculation', () => {
   })
 
   describe('Selection Validation', () => {
-    const isValidSelection = (selection: { startX: number; startY: number; endX: number; endY: number }) => {
+    const isValidSelection = (selection: {
+      startX: number
+      startY: number
+      endX: number
+      endY: number
+    }) => {
       const width = Math.abs(selection.endX - selection.startX)
       const height = Math.abs(selection.endY - selection.startY)
       return width > 5 && height > 5

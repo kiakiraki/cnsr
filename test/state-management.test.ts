@@ -5,7 +5,15 @@ describe('State Management', () => {
   describe('Selection State Lifecycle', () => {
     let hasSelection: { value: boolean }
     let isSelecting: { value: boolean }
-    let selection: { value: { startX: number; startY: number; endX: number; endY: number; active: boolean } }
+    let selection: {
+      value: {
+        startX: number
+        startY: number
+        endX: number
+        endY: number
+        active: boolean
+      }
+    }
 
     beforeEach(() => {
       hasSelection = ref(false)
