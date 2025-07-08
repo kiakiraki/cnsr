@@ -1,9 +1,6 @@
 <template>
   <div class="image-mosaic-container">
-    <div
-      v-if="!uploadedImage"
-      class="upload-area"
-    >
+    <div v-if="!uploadedImage" class="upload-area">
       <input
         id="imageUpload"
         ref="fileInput"
@@ -11,11 +8,8 @@
         accept="image/*"
         class="file-input"
         @change="handleFileUpload"
-      >
-      <label
-        for="imageUpload"
-        class="upload-label"
-      >
+      />
+      <label for="imageUpload" class="upload-label">
         <div class="upload-content">
           <svg
             class="upload-icon"
@@ -26,12 +20,7 @@
           >
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
             <polyline points="17,8 12,3 7,8" />
-            <line
-              x1="12"
-              y1="3"
-              x2="12"
-              y2="15"
-            />
+            <line x1="12" y1="3" x2="12" y2="15" />
           </svg>
           <p>画像をアップロード</p>
           <p class="upload-hint">クリック または ドラッグ&ドロップ</p>
@@ -39,37 +28,23 @@
       </label>
     </div>
 
-    <div
-      v-if="uploadedImage"
-      class="image-editor"
-    >
+    <div v-if="uploadedImage" class="image-editor">
       <div class="mode-selector">
         <label class="mode-label">処理モード:</label>
         <div class="radio-group">
           <label class="radio-option">
-            <input
-              v-model="processingMode"
-              type="radio"
-              value="blackfill"
-            >
+            <input v-model="processingMode" type="radio" value="blackfill" />
             <span>黒塗り</span>
           </label>
           <label class="radio-option">
-            <input
-              v-model="processingMode"
-              type="radio"
-              value="mosaic"
-            >
+            <input v-model="processingMode" type="radio" value="mosaic" />
             <span>モザイク</span>
           </label>
         </div>
       </div>
 
       <div class="editor-controls">
-        <button
-          class="btn btn-secondary"
-          @click="resetImage"
-        >
+        <button class="btn btn-secondary" @click="resetImage">
           新しい画像
         </button>
         <button
@@ -95,10 +70,7 @@
         </button>
       </div>
 
-      <div
-        ref="canvasContainer"
-        class="canvas-container"
-      >
+      <div ref="canvasContainer" class="canvas-container">
         <canvas
           ref="canvas"
           class="image-canvas"
@@ -155,7 +127,7 @@ const handleFileUpload = (event: Event) => {
 
   if (file && file.type.startsWith('image/')) {
     const reader = new FileReader()
-    reader.onload = (e) => {
+    reader.onload = e => {
       uploadedImage.value = e.target?.result as string
       nextTick(() => {
         loadImageToCanvas()
@@ -206,8 +178,7 @@ const getEventPosition = (event: MouseEvent | TouchEvent) => {
   if (event instanceof MouseEvent) {
     clientX = event.clientX
     clientY = event.clientY
-  }
-  else {
+  } else {
     clientX = event.touches[0].clientX
     clientY = event.touches[0].clientY
   }
@@ -250,9 +221,9 @@ const endSelection = (event: MouseEvent | TouchEvent) => {
   if (!isSelecting.value) return
 
   isSelecting.value = false
-  hasSelection.value
-    = Math.abs(selection.value.endX - selection.value.startX) > 5
-      && Math.abs(selection.value.endY - selection.value.startY) > 5
+  hasSelection.value =
+    Math.abs(selection.value.endX - selection.value.startX) > 5 &&
+    Math.abs(selection.value.endY - selection.value.startY) > 5
 
   // Auto-apply processing if there's a valid selection
   if (hasSelection.value) {
@@ -278,7 +249,7 @@ const redrawCanvas = () => {
       selection.value.startX,
       selection.value.startY,
       width,
-      height,
+      height
     )
     ctx.setLineDash([])
   }
@@ -293,7 +264,7 @@ const applyMosaic = () => {
     0,
     0,
     canvas.value!.width,
-    canvas.value!.height,
+    canvas.value!.height
   )
 
   // Add to undo stack and manage size limit
@@ -311,8 +282,7 @@ const applyMosaic = () => {
     // Fill the selected area with black
     ctx.fillStyle = '#000000'
     ctx.fillRect(startX, startY, width, height)
-  }
-  else if (processingMode.value === 'mosaic') {
+  } else if (processingMode.value === 'mosaic') {
     // Apply mosaic effect using fillRect method
     const mosaicSize = 10
 
@@ -321,11 +291,11 @@ const applyMosaic = () => {
         // Get a sample pixel from the center of each block
         const sampleX = Math.min(
           startX + x + Math.floor(mosaicSize / 2),
-          startX + width - 1,
+          startX + width - 1
         )
         const sampleY = Math.min(
           startY + y + Math.floor(mosaicSize / 2),
-          startY + height - 1,
+          startY + height - 1
         )
 
         // Get the color data of the sample pixel
@@ -354,7 +324,7 @@ const applyMosaic = () => {
     0,
     0,
     canvas.value!.width,
-    canvas.value!.height,
+    canvas.value!.height
   )
 
   // Enable undo after first operation
@@ -376,7 +346,7 @@ const undoLastAction = () => {
     0,
     0,
     canvas.value!.width,
-    canvas.value!.height,
+    canvas.value!.height
   )
 
   // Update undo availability - can undo if there are still states in stack
