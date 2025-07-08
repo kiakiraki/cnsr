@@ -8,7 +8,7 @@
         accept="image/*"
         class="file-input"
         @change="handleFileUpload"
-      />
+      >
       <label for="imageUpload" class="upload-label">
         <div class="upload-content">
           <svg
@@ -33,11 +33,11 @@
         <label class="mode-label">処理モード:</label>
         <div class="radio-group">
           <label class="radio-option">
-            <input v-model="processingMode" type="radio" value="blackfill" />
+            <input v-model="processingMode" type="radio" value="blackfill" >
             <span>黒塗り</span>
           </label>
           <label class="radio-option">
-            <input v-model="processingMode" type="radio" value="mosaic" />
+            <input v-model="processingMode" type="radio" value="mosaic" >
             <span>モザイク</span>
           </label>
         </div>

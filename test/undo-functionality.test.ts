@@ -2,15 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
 
 describe('Undo Functionality', () => {
-  let undoStack: any
-  let canUndo: any
-  let mockCanvas: any
-  let mockCtx: any
-  let originalImageData: any
+  let undoStack: { value: ImageData[] }
+  let canUndo: { value: boolean }
+  let mockCanvas: { value: { width: number; height: number; getContext: () => CanvasRenderingContext2D } }
+  let mockCtx: CanvasRenderingContext2D | null
+  let originalImageData: ImageData | null
   const MAX_UNDO_LEVELS = 64
 
   beforeEach(() => {
-    undoStack = ref<any[]>([])
+    undoStack = ref<ImageData[]>([])
     canUndo = ref(false)
     originalImageData = {
       data: new Uint8ClampedArray([255, 255, 255, 255]), // White pixel
@@ -34,7 +34,7 @@ describe('Undo Functionality', () => {
     }
   })
 
-  const addToUndoStack = (imageData: any) => {
+  const addToUndoStack = (imageData: ImageData | null) => {
     undoStack.value.push(imageData)
     if (undoStack.value.length > MAX_UNDO_LEVELS) {
       undoStack.value.shift()
@@ -125,14 +125,18 @@ describe('Undo Functionality', () => {
 
     it('should remove oldest entries when exceeding limit', () => {
       const firstState = { data: 'first-state' }
-      const secondState = { data: 'second-state' }
+      // Remove unused variable
       
       // Manually add to test limit behavior
       undoStack.value.push(firstState)
       
       // Fill stack to maximum
       for (let i = 0; i < MAX_UNDO_LEVELS; i++) {
-        addToUndoStack({ data: `state-${i}` })
+        addToUndoStack({
+          data: new Uint8ClampedArray([i, i, i, 255]),
+          width: 1,
+          height: 1,
+        } as ImageData)
       }
 
       expect(undoStack.value.length).toBe(MAX_UNDO_LEVELS)

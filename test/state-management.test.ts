@@ -1,11 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { ref } from 'vue'
 
 describe('State Management', () => {
   describe('Selection State Lifecycle', () => {
-    let hasSelection: any
-    let isSelecting: any
-    let selection: any
+    let hasSelection: { value: boolean }
+    let isSelecting: { value: boolean }
+    let selection: { value: { startX: number; startY: number; endX: number; endY: number; active: boolean } }
 
     beforeEach(() => {
       hasSelection = ref(false)
@@ -141,7 +141,7 @@ describe('State Management', () => {
   })
 
   describe('Processing Mode State', () => {
-    let processingMode: any
+    let processingMode: { value: 'blackfill' | 'mosaic' }
 
     beforeEach(() => {
       processingMode = ref<'blackfill' | 'mosaic'>('blackfill')
@@ -164,8 +164,8 @@ describe('State Management', () => {
   })
 
   describe('Image State Management', () => {
-    let uploadedImage: any
-    let processedImage: any
+    let uploadedImage: { value: string | null }
+    let processedImage: { value: string | null }
 
     beforeEach(() => {
       uploadedImage = ref<string | null>(null)
@@ -202,16 +202,16 @@ describe('State Management', () => {
   })
 
   describe('Undo State Management', () => {
-    let canUndo: any
-    let undoStack: any
+    let canUndo: { value: boolean }
+    let undoStack: { value: Array<{ data: string }> }
     const MAX_UNDO_LEVELS = 64
 
     beforeEach(() => {
       canUndo = ref(false)
-      undoStack = ref<any[]>([])
+      undoStack = ref<Array<{ data: string }>>([])
     })
 
-    const addToUndoStack = (imageData: any) => {
+    const addToUndoStack = (imageData: { data: string }) => {
       undoStack.value.push(imageData)
       if (undoStack.value.length > MAX_UNDO_LEVELS) {
         undoStack.value.shift()

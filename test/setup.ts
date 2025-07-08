@@ -29,14 +29,14 @@ const mockCanvas = {
 }
 
 // Mock HTML Canvas Element
-global.HTMLCanvasElement = vi.fn(() => mockCanvas) as any
+global.HTMLCanvasElement = vi.fn(() => mockCanvas) as unknown as typeof HTMLCanvasElement
 
 // Mock FileReader
 global.FileReader = vi.fn(() => ({
   readAsDataURL: vi.fn(),
   result: 'data:image/png;base64,fake-image-data',
   onload: null,
-})) as any
+})) as unknown as typeof FileReader
 
 // Mock Image
 global.Image = vi.fn(() => ({
@@ -44,13 +44,13 @@ global.Image = vi.fn(() => ({
   onload: null,
   width: 100,
   height: 100,
-})) as any
+})) as unknown as typeof Image
 
 // Mock URL.createObjectURL
 global.URL.createObjectURL = vi.fn(() => 'blob:fake-url')
 
 // Mock Touch API
-global.Touch = vi.fn((init: any) => ({
+global.Touch = vi.fn((init: TouchInit) => ({
   identifier: init.identifier || 1,
   target: init.target || document.body,
   clientX: init.clientX || 0,
@@ -63,17 +63,17 @@ global.Touch = vi.fn((init: any) => ({
   radiusY: init.radiusY || 0,
   rotationAngle: init.rotationAngle || 0,
   force: init.force || 0,
-})) as any
+})) as unknown as typeof Touch
 
 // Mock TouchEvent
-global.TouchEvent = vi.fn((type: string, init: any) => ({
+global.TouchEvent = vi.fn((type: string, init: TouchEventInit) => ({
   type,
   touches: init.touches || [],
   targetTouches: init.targetTouches || [],
   changedTouches: init.changedTouches || [],
   preventDefault: vi.fn(),
   stopPropagation: vi.fn(),
-})) as any
+})) as unknown as typeof TouchEvent
 
 // Mock document.createElement for download links
 const mockElement = {
@@ -85,7 +85,7 @@ const mockElement = {
 const originalCreateElement = document.createElement
 document.createElement = vi.fn((tagName: string) => {
   if (tagName === 'a') {
-    return mockElement as any
+    return mockElement as unknown as HTMLAnchorElement
   }
   return originalCreateElement.call(document, tagName)
 })
