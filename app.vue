@@ -19,7 +19,9 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
+    Cantarell, sans-serif;
   line-height: 1.6;
   color: #333;
   background-color: #f5f5f5;
@@ -52,7 +54,7 @@ body {
   .header h1 {
     font-size: 2em;
   }
-  
+
   .header p {
     font-size: 1em;
   }
@@ -63,11 +65,11 @@ body {
     background-color: #1a1a1a;
     color: #e0e0e0;
   }
-  
+
   .header h1 {
     color: #ffffff;
   }
-  
+
   .header p {
     color: #cccccc;
   }

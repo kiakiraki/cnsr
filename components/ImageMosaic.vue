@@ -1,20 +1,37 @@
 <template>
   <div class="image-mosaic-container">
-    <div class="upload-area" v-if="!uploadedImage">
-      <input 
-        type="file" 
-        @change="handleFileUpload" 
+    <div
+      v-if="!uploadedImage"
+      class="upload-area"
+    >
+      <input
+        id="imageUpload"
+        ref="fileInput"
+        type="file"
         accept="image/*"
         class="file-input"
-        ref="fileInput"
-        id="imageUpload"
+        @change="handleFileUpload"
       >
-      <label for="imageUpload" class="upload-label">
+      <label
+        for="imageUpload"
+        class="upload-label"
+      >
         <div class="upload-content">
-          <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17,8 12,3 7,8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
+          <svg
+            class="upload-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17,8 12,3 7,8" />
+            <line
+              x1="12"
+              y1="3"
+              x2="12"
+              y2="15"
+            />
           </svg>
           <p>画像をアップロード</p>
           <p class="upload-hint">クリック または ドラッグ&ドロップ</p>
@@ -22,45 +39,76 @@
       </label>
     </div>
 
-    <div v-if="uploadedImage" class="image-editor">
+    <div
+      v-if="uploadedImage"
+      class="image-editor"
+    >
       <div class="mode-selector">
         <label class="mode-label">処理モード:</label>
         <div class="radio-group">
           <label class="radio-option">
-            <input type="radio" v-model="processingMode" value="blackfill" />
+            <input
+              v-model="processingMode"
+              type="radio"
+              value="blackfill"
+            >
             <span>黒塗り</span>
           </label>
           <label class="radio-option">
-            <input type="radio" v-model="processingMode" value="mosaic" />
+            <input
+              v-model="processingMode"
+              type="radio"
+              value="mosaic"
+            >
             <span>モザイク</span>
           </label>
         </div>
       </div>
-      
+
       <div class="editor-controls">
-        <button @click="resetImage" class="btn btn-secondary">新しい画像</button>
-        <button @click="resetToOriginal" class="btn btn-info" :disabled="!canUndo">
+        <button
+          class="btn btn-secondary"
+          @click="resetImage"
+        >
+          新しい画像
+        </button>
+        <button
+          class="btn btn-info"
+          :disabled="!canUndo"
+          @click="resetToOriginal"
+        >
           最初に戻す
         </button>
-        <button @click="undoLastAction" class="btn btn-warning" :disabled="!canUndo">
+        <button
+          class="btn btn-warning"
+          :disabled="!canUndo"
+          @click="undoLastAction"
+        >
           元に戻す
         </button>
-        <button @click="downloadImage" class="btn btn-success" v-if="processedImage">
+        <button
+          v-if="processedImage"
+          class="btn btn-success"
+          @click="downloadImage"
+        >
           ダウンロード
         </button>
       </div>
 
-      <div class="canvas-container" ref="canvasContainer">
-        <canvas 
+      <div
+        ref="canvasContainer"
+        class="canvas-container"
+      >
+        <canvas
           ref="canvas"
+          class="image-canvas"
           @mousedown="startSelection"
           @mousemove="updateSelection"
           @mouseup="endSelection"
           @touchstart="startSelection"
           @touchmove="updateSelection"
           @touchend="endSelection"
-          class="image-canvas"
-        ></canvas>
+        />
       </div>
     </div>
   </div>
@@ -94,7 +142,7 @@ const selection = ref<SelectionArea>({
   startY: 0,
   endX: 0,
   endY: 0,
-  active: false
+  active: false,
 })
 
 let ctx: CanvasRenderingContext2D | null = null
@@ -104,7 +152,7 @@ let currentImage: HTMLImageElement | null = null
 const handleFileUpload = (event: Event) => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
-  
+
   if (file && file.type.startsWith('image/')) {
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -125,26 +173,25 @@ const loadImageToCanvas = () => {
     currentImage = img
     const canvasEl = canvas.value!
     ctx = canvasEl.getContext('2d')!
-    
+
     // レスポンシブサイズ調整
     const container = canvasContainer.value!
     const containerWidth = container.clientWidth
     const maxWidth = Math.min(containerWidth - 20, 800)
-    
+
     const aspectRatio = img.height / img.width
     const canvasWidth = Math.min(img.width, maxWidth)
     const canvasHeight = canvasWidth * aspectRatio
-    
+
     canvasEl.width = canvasWidth
     canvasEl.height = canvasHeight
-    
+
     ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight)
     originalImageData = ctx.getImageData(0, 0, canvasWidth, canvasHeight)
-    
+
     // Initialize undo stack - start empty, first edit will add the original state
     undoStack.value = []
     canUndo.value = false
-    
   }
   img.src = uploadedImage.value
 }
@@ -153,34 +200,35 @@ const getEventPosition = (event: MouseEvent | TouchEvent) => {
   const rect = canvas.value!.getBoundingClientRect()
   const scaleX = canvas.value!.width / rect.width
   const scaleY = canvas.value!.height / rect.height
-  
+
   let clientX: number, clientY: number
-  
+
   if (event instanceof MouseEvent) {
     clientX = event.clientX
     clientY = event.clientY
-  } else {
+  }
+  else {
     clientX = event.touches[0].clientX
     clientY = event.touches[0].clientY
   }
-  
+
   return {
     x: (clientX - rect.left) * scaleX,
-    y: (clientY - rect.top) * scaleY
+    y: (clientY - rect.top) * scaleY,
   }
 }
 
 const startSelection = (event: MouseEvent | TouchEvent) => {
   event.preventDefault()
   if (!canvas.value) return
-  
+
   const pos = getEventPosition(event)
   selection.value = {
     startX: pos.x,
     startY: pos.y,
     endX: pos.x,
     endY: pos.y,
-    active: true
+    active: true,
   }
   isSelecting.value = true
   hasSelection.value = false
@@ -189,22 +237,23 @@ const startSelection = (event: MouseEvent | TouchEvent) => {
 const updateSelection = (event: MouseEvent | TouchEvent) => {
   event.preventDefault()
   if (!isSelecting.value || !canvas.value) return
-  
+
   const pos = getEventPosition(event)
   selection.value.endX = pos.x
   selection.value.endY = pos.y
-  
+
   redrawCanvas()
 }
 
 const endSelection = (event: MouseEvent | TouchEvent) => {
   event.preventDefault()
   if (!isSelecting.value) return
-  
+
   isSelecting.value = false
-  hasSelection.value = Math.abs(selection.value.endX - selection.value.startX) > 5 &&
-                      Math.abs(selection.value.endY - selection.value.startY) > 5
-  
+  hasSelection.value
+    = Math.abs(selection.value.endX - selection.value.startX) > 5
+      && Math.abs(selection.value.endY - selection.value.startY) > 5
+
   // Auto-apply processing if there's a valid selection
   if (hasSelection.value) {
     applyMosaic()
@@ -213,62 +262,79 @@ const endSelection = (event: MouseEvent | TouchEvent) => {
 
 const redrawCanvas = () => {
   if (!ctx || !originalImageData) return
-  
+
   ctx.putImageData(originalImageData, 0, 0)
-  
+
   // Show dashed outline only while dragging
   if (isSelecting.value) {
     ctx.strokeStyle = '#ff0000'
     ctx.lineWidth = 2
     ctx.setLineDash([5, 5])
-    
+
     const width = selection.value.endX - selection.value.startX
     const height = selection.value.endY - selection.value.startY
-    
-    ctx.strokeRect(selection.value.startX, selection.value.startY, width, height)
+
+    ctx.strokeRect(
+      selection.value.startX,
+      selection.value.startY,
+      width,
+      height,
+    )
     ctx.setLineDash([])
   }
 }
 
 const applyMosaic = () => {
   if (!ctx || !originalImageData || !hasSelection.value) return
-  
+
   // Save current state to undo stack before making changes (clean state without selection overlay)
   ctx.putImageData(originalImageData, 0, 0)
-  const currentState = ctx.getImageData(0, 0, canvas.value!.width, canvas.value!.height)
-  
+  const currentState = ctx.getImageData(
+    0,
+    0,
+    canvas.value!.width,
+    canvas.value!.height,
+  )
+
   // Add to undo stack and manage size limit
   undoStack.value.push(currentState)
   if (undoStack.value.length > MAX_UNDO_LEVELS) {
     undoStack.value.shift() // Remove oldest entry
   }
-  
+
   const startX = Math.min(selection.value.startX, selection.value.endX)
   const startY = Math.min(selection.value.startY, selection.value.endY)
   const width = Math.abs(selection.value.endX - selection.value.startX)
   const height = Math.abs(selection.value.endY - selection.value.startY)
-  
+
   if (processingMode.value === 'blackfill') {
     // Fill the selected area with black
     ctx.fillStyle = '#000000'
     ctx.fillRect(startX, startY, width, height)
-  } else if (processingMode.value === 'mosaic') {
+  }
+  else if (processingMode.value === 'mosaic') {
     // Apply mosaic effect using fillRect method
     const mosaicSize = 10
-    
+
     for (let y = 0; y < height; y += mosaicSize) {
       for (let x = 0; x < width; x += mosaicSize) {
         // Get a sample pixel from the center of each block
-        const sampleX = Math.min(startX + x + Math.floor(mosaicSize / 2), startX + width - 1)
-        const sampleY = Math.min(startY + y + Math.floor(mosaicSize / 2), startY + height - 1)
-        
+        const sampleX = Math.min(
+          startX + x + Math.floor(mosaicSize / 2),
+          startX + width - 1,
+        )
+        const sampleY = Math.min(
+          startY + y + Math.floor(mosaicSize / 2),
+          startY + height - 1,
+        )
+
         // Get the color data of the sample pixel
         const imageData = ctx.getImageData(sampleX, sampleY, 1, 1)
         const pixelData = imageData.data
         const r = pixelData[0]
         const g = pixelData[1]
         const b = pixelData[2]
-        
+
         // Fill the block with the sampled color
         ctx.fillStyle = `rgb(${r}, ${g}, ${b})`
         const blockWidth = Math.min(mosaicSize, width - x)
@@ -277,47 +343,57 @@ const applyMosaic = () => {
       }
     }
   }
-  
+
   // Clear selection state
   selection.value.active = false
   hasSelection.value = false
   isSelecting.value = false
-  
+
   // Update original image data to include the black rectangle
-  originalImageData = ctx.getImageData(0, 0, canvas.value!.width, canvas.value!.height)
-  
+  originalImageData = ctx.getImageData(
+    0,
+    0,
+    canvas.value!.width,
+    canvas.value!.height,
+  )
+
   // Enable undo after first operation
   canUndo.value = undoStack.value.length > 0
-  
+
   // Save the processed image (without any selection overlay)
   processedImage.value = canvas.value!.toDataURL()
 }
 
 const undoLastAction = () => {
   if (!ctx || undoStack.value.length <= 0) return
-  
+
   // Get the last saved state
   const previousState = undoStack.value.pop()!
-  
+
   // Restore the previous state
   ctx.putImageData(previousState, 0, 0)
-  originalImageData = ctx.getImageData(0, 0, canvas.value!.width, canvas.value!.height)
-  
+  originalImageData = ctx.getImageData(
+    0,
+    0,
+    canvas.value!.width,
+    canvas.value!.height,
+  )
+
   // Update undo availability - can undo if there are still states in stack
   canUndo.value = undoStack.value.length > 0
-  
+
   // Clear selection state
   selection.value.active = false
   hasSelection.value = false
   isSelecting.value = false
-  
+
   // Update processed image
   processedImage.value = canvas.value!.toDataURL()
 }
 
 const downloadImage = () => {
   if (!processedImage.value) return
-  
+
   const link = document.createElement('a')
   link.download = 'mosaic-image.png'
   link.href = processedImage.value
@@ -326,22 +402,22 @@ const downloadImage = () => {
 
 const resetToOriginal = () => {
   if (!ctx || !currentImage) return
-  
+
   // Redraw the original image
   const canvasEl = canvas.value!
   ctx.clearRect(0, 0, canvasEl.width, canvasEl.height)
   ctx.drawImage(currentImage, 0, 0, canvasEl.width, canvasEl.height)
   originalImageData = ctx.getImageData(0, 0, canvasEl.width, canvasEl.height)
-  
+
   // Reset undo stack
   undoStack.value = []
   canUndo.value = false
-  
+
   // Clear selection state
   selection.value.active = false
   hasSelection.value = false
   isSelecting.value = false
-  
+
   // Update processed image
   processedImage.value = canvas.value!.toDataURL()
 }
@@ -357,7 +433,6 @@ const resetImage = () => {
     fileInput.value.value = ''
   }
 }
-
 
 onMounted(() => {
   window.addEventListener('resize', () => {
@@ -528,7 +603,7 @@ onMounted(() => {
   color: #495057;
 }
 
-.radio-option input[type="radio"] {
+.radio-option input[type='radio'] {
   margin: 0;
   cursor: pointer;
 }
@@ -559,25 +634,25 @@ onMounted(() => {
   .image-mosaic-container {
     padding: 10px;
   }
-  
+
   .upload-area {
     padding: 20px;
   }
-  
+
   .upload-icon {
     width: 32px;
     height: 32px;
   }
-  
+
   .editor-controls {
     justify-content: center;
   }
-  
+
   .btn {
     padding: 8px 16px;
     font-size: 12px;
   }
-  
+
   .canvas-container {
     padding: 10px;
   }
@@ -588,32 +663,32 @@ onMounted(() => {
     border-color: #555;
     background-color: #2d2d2d;
   }
-  
+
   .upload-content {
     color: #ccc;
   }
-  
+
   .upload-hint {
     color: #888;
   }
-  
+
   .mode-selector {
     background-color: #2d2d2d;
     border-color: #555;
   }
-  
+
   .mode-label {
     color: #ccc;
   }
-  
+
   .radio-option {
     color: #ccc;
   }
-  
+
   .canvas-container {
     background-color: #2d2d2d;
   }
-  
+
   .image-canvas {
     border-color: #555;
   }
