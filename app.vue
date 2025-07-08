@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div @dragover.prevent @drop.prevent>
     <NuxtRouteAnnouncer />
     <main class="main-container">
       <header class="header">
