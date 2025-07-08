@@ -29,5 +29,8 @@ jobs:
       - name: Check Prettier formatting
         run: npm run format:check
 
+      - name: Run tests
+        run: npm run test:run
+
       - name: Run build check
         run: npm run build
