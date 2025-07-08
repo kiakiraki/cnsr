@@ -4,4 +4,8 @@ export default createConfigForNuxt({
   features: {
     stylistic: false,
   },
+}).override('nuxt/vue/rules', {
+  rules: {
+    'vue/html-self-closing': 'off',
+  },
 })

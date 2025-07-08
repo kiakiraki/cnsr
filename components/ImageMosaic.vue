@@ -1,6 +1,14 @@
 <template>
   <div class="image-mosaic-container">
-    <div v-if="!uploadedImage" class="upload-area">
+    <div
+      v-if="!uploadedImage"
+      class="upload-area"
+      :class="{ 'drag-over': isDragOver }"
+      @drop="handleDrop"
+      @dragover.prevent="handleDragOver"
+      @dragenter.prevent="handleDragEnter"
+      @dragleave="handleDragLeave"
+    >
       <input
         id="imageUpload"
         ref="fileInput"
@@ -108,6 +116,7 @@ const canUndo = ref(false)
 const undoStack = ref<ImageData[]>([])
 const MAX_UNDO_LEVELS = 64
 const processingMode = ref<'blackfill' | 'mosaic'>('blackfill')
+const isDragOver = ref(false)
 
 const selection = ref<SelectionArea>({
   startX: 0,
@@ -126,14 +135,55 @@ const handleFileUpload = (event: Event) => {
   const file = target.files?.[0]
 
   if (file && file.type.startsWith('image/')) {
-    const reader = new FileReader()
-    reader.onload = e => {
-      uploadedImage.value = e.target?.result as string
-      nextTick(() => {
-        loadImageToCanvas()
-      })
+    processImageFile(file)
+  }
+}
+
+const processImageFile = (file: File) => {
+  const reader = new FileReader()
+  reader.onload = e => {
+    uploadedImage.value = e.target?.result as string
+    nextTick(() => {
+      loadImageToCanvas()
+    })
+  }
+  reader.readAsDataURL(file)
+}
+
+const handleDragEnter = (event: DragEvent) => {
+  event.preventDefault()
+  isDragOver.value = true
+}
+
+const handleDragOver = (event: DragEvent) => {
+  event.preventDefault()
+  isDragOver.value = true
+}
+
+const handleDragLeave = (event: DragEvent) => {
+  event.preventDefault()
+  // Only set isDragOver to false if we're leaving the upload area completely
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  if (
+    event.clientX < rect.left ||
+    event.clientX > rect.right ||
+    event.clientY < rect.top ||
+    event.clientY > rect.bottom
+  ) {
+    isDragOver.value = false
+  }
+}
+
+const handleDrop = (event: DragEvent) => {
+  event.preventDefault()
+  isDragOver.value = false
+
+  const files = event.dataTransfer?.files
+  if (files && files.length > 0) {
+    const file = files[0]
+    if (file.type.startsWith('image/')) {
+      processImageFile(file)
     }
-    reader.readAsDataURL(file)
   }
 }
 
@@ -432,6 +482,11 @@ onMounted(() => {
 
 .upload-area:hover {
   border-color: #007bff;
+}
+
+.upload-area.drag-over {
+  border-color: #007bff;
+  background-color: rgba(0, 123, 255, 0.1);
 }
 
 .file-input {
