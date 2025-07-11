@@ -446,8 +446,7 @@ const resetImage = () => {
   }
 }
 
-onMounted(() => {
-})
+onMounted(() => {})
 </script>
 
 <style scoped>
