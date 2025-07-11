@@ -196,20 +196,12 @@ const loadImageToCanvas = () => {
     const canvasEl = canvas.value!
     ctx = canvasEl.getContext('2d')!
 
-    // レスポンシブサイズ調整
-    const container = canvasContainer.value!
-    const containerWidth = container.clientWidth
-    const maxWidth = Math.min(containerWidth - 20, 800)
+    // 元の解像度を保持
+    canvasEl.width = img.width
+    canvasEl.height = img.height
 
-    const aspectRatio = img.height / img.width
-    const canvasWidth = Math.min(img.width, maxWidth)
-    const canvasHeight = canvasWidth * aspectRatio
-
-    canvasEl.width = canvasWidth
-    canvasEl.height = canvasHeight
-
-    ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight)
-    originalImageData = ctx.getImageData(0, 0, canvasWidth, canvasHeight)
+    ctx.drawImage(img, 0, 0, img.width, img.height)
+    originalImageData = ctx.getImageData(0, 0, img.width, img.height)
 
     // Initialize undo stack - start empty, first edit will add the original state
     undoStack.value = []
@@ -454,15 +446,7 @@ const resetImage = () => {
   }
 }
 
-onMounted(() => {
-  window.addEventListener('resize', () => {
-    if (uploadedImage.value) {
-      nextTick(() => {
-        loadImageToCanvas()
-      })
-    }
-  })
-})
+onMounted(() => {})
 </script>
 
 <style scoped>
