@@ -365,10 +365,35 @@ const applyMosaic = () => {
       }
     }
   } else if (processingMode.value === 'blur') {
-    // Apply Gaussian blur effect
+    // Apply Gaussian blur effect using Canvas filter
+    // Calculate blur radius based on image size for consistent effect
+    const imageShortSide = Math.min(canvas.value!.width, canvas.value!.height)
+    const blurRadius = Math.max(2, Math.floor(imageShortSide / 100))
+
+    // Create temporary canvas to apply blur
+    const tempCanvas = document.createElement('canvas')
+    const tempCtx = tempCanvas.getContext('2d')!
+    tempCanvas.width = width
+    tempCanvas.height = height
+
+    // Copy selected region to temp canvas
     const imageData = ctx.getImageData(startX, startY, width, height)
-    const blurredData = applyGaussianBlur(imageData, width, height)
-    ctx.putImageData(blurredData, startX, startY)
+    tempCtx.putImageData(imageData, 0, 0)
+
+    // Apply blur filter and draw back
+    ctx.filter = `blur(${blurRadius}px)`
+    ctx.drawImage(
+      tempCanvas,
+      0,
+      0,
+      width,
+      height,
+      startX,
+      startY,
+      width,
+      height
+    )
+    ctx.filter = 'none' // Reset filter
   }
 
   // Clear selection state
@@ -447,93 +472,6 @@ const resetToOriginal = () => {
 
   // Update processed image
   processedImage.value = canvas.value!.toDataURL()
-}
-
-// Gaussian blur implementation
-const applyGaussianBlur = (
-  imageData: ImageData,
-  width: number,
-  height: number
-): ImageData => {
-  const data = new Uint8ClampedArray(imageData.data)
-  const output = new Uint8ClampedArray(imageData.data.length)
-
-  // Calculate blur radius based on image size for consistent effect
-  const imageShortSide = Math.min(width, height)
-  const radius = Math.max(2, Math.floor(imageShortSide / 100))
-
-  // Create Gaussian kernel
-  const kernel: number[] = []
-  const sigma = radius / 3
-  let kernelSum = 0
-
-  for (let i = -radius; i <= radius; i++) {
-    const value = Math.exp(-(i * i) / (2 * sigma * sigma))
-    kernel.push(value)
-    kernelSum += value
-  }
-
-  // Normalize kernel
-  for (let i = 0; i < kernel.length; i++) {
-    kernel[i] /= kernelSum
-  }
-
-  // Apply horizontal blur
-  const temp = new Uint8ClampedArray(data.length)
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      let r = 0,
-        g = 0,
-        b = 0,
-        a = 0
-
-      for (let i = -radius; i <= radius; i++) {
-        const px = Math.max(0, Math.min(width - 1, x + i))
-        const index = (y * width + px) * 4
-        const weight = kernel[i + radius]
-
-        r += data[index] * weight
-        g += data[index + 1] * weight
-        b += data[index + 2] * weight
-        a += data[index + 3] * weight
-      }
-
-      const index = (y * width + x) * 4
-      temp[index] = r
-      temp[index + 1] = g
-      temp[index + 2] = b
-      temp[index + 3] = a
-    }
-  }
-
-  // Apply vertical blur
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      let r = 0,
-        g = 0,
-        b = 0,
-        a = 0
-
-      for (let i = -radius; i <= radius; i++) {
-        const py = Math.max(0, Math.min(height - 1, y + i))
-        const index = (py * width + x) * 4
-        const weight = kernel[i + radius]
-
-        r += temp[index] * weight
-        g += temp[index + 1] * weight
-        b += temp[index + 2] * weight
-        a += temp[index + 3] * weight
-      }
-
-      const index = (y * width + x) * 4
-      output[index] = r
-      output[index + 1] = g
-      output[index + 2] = b
-      output[index + 3] = a
-    }
-  }
-
-  return new ImageData(output, width, height)
 }
 
 const resetImage = () => {
