@@ -250,8 +250,8 @@ const loadImageToCanvas = () => {
 }
 
 const getEventPosition = (event: MouseEvent | TouchEvent) => {
-  // Use cached rect and scale values for better performance
-  if (!canvasRect) {
+  // For touch events, always get fresh canvas metrics to ensure accuracy
+  if (event instanceof TouchEvent || !canvasRect) {
     updateCanvasMetrics()
   }
 
@@ -261,19 +261,26 @@ const getEventPosition = (event: MouseEvent | TouchEvent) => {
     clientX = event.clientX
     clientY = event.clientY
   } else {
-    clientX = event.touches[0].clientX
-    clientY = event.touches[0].clientY
+    // For touch events, use the first touch point
+    const touch = event.touches[0] || event.changedTouches[0]
+    clientX = touch.clientX
+    clientY = touch.clientY
   }
 
-  return {
-    x: (clientX - canvasRect!.left) * scaleX,
-    y: (clientY - canvasRect!.top) * scaleY,
-  }
+  const x = (clientX - canvasRect!.left) * scaleX
+  const y = (clientY - canvasRect!.top) * scaleY
+
+  return { x, y }
 }
 
 const startSelection = (event: MouseEvent | TouchEvent) => {
   event.preventDefault()
   if (!canvas.value) return
+
+  // Ensure canvas metrics are up to date for touch events
+  if (event instanceof TouchEvent) {
+    updateCanvasMetrics()
+  }
 
   const pos = getEventPosition(event)
   selection.value = {
