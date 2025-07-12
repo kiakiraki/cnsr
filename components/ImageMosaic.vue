@@ -281,7 +281,10 @@ const redrawCanvas = () => {
   // Show dashed outline only while dragging
   if (isSelecting.value) {
     ctx.strokeStyle = '#ff0000'
-    ctx.lineWidth = 2
+    // Calculate dynamic line width based on image size for better visibility
+    const imageShortSide = Math.min(canvas.value!.width, canvas.value!.height)
+    const lineWidth = Math.max(2, Math.floor(imageShortSide / 400))
+    ctx.lineWidth = lineWidth
     ctx.setLineDash([5, 5])
 
     const width = selection.value.endX - selection.value.startX
