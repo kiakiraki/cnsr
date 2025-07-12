@@ -48,6 +48,10 @@
             <input v-model="processingMode" type="radio" value="mosaic" />
             <span>モザイク</span>
           </label>
+          <label class="radio-option">
+            <input v-model="processingMode" type="radio" value="blur" />
+            <span>ブラー</span>
+          </label>
         </div>
       </div>
 
@@ -283,7 +287,7 @@ const redrawCanvas = () => {
     ctx.strokeStyle = '#ff0000'
     // Calculate dynamic line width based on image size for better visibility
     const imageShortSide = Math.min(canvas.value!.width, canvas.value!.height)
-    const lineWidth = Math.max(2, Math.floor(imageShortSide / 400))
+    const lineWidth = Math.max(3, Math.floor(imageShortSide / 200))
     ctx.lineWidth = lineWidth
     ctx.setLineDash([5, 5])
 
@@ -360,6 +364,36 @@ const applyMosaic = () => {
         ctx.fillRect(startX + x, startY + y, blockWidth, blockHeight)
       }
     }
+  } else if (processingMode.value === 'blur') {
+    // Apply Gaussian blur effect using Canvas filter
+    // Calculate blur radius based on image size for consistent effect
+    const imageShortSide = Math.min(canvas.value!.width, canvas.value!.height)
+    const blurRadius = Math.max(2, Math.floor(imageShortSide / 100))
+
+    // Create temporary canvas to apply blur
+    const tempCanvas = document.createElement('canvas')
+    const tempCtx = tempCanvas.getContext('2d')!
+    tempCanvas.width = width
+    tempCanvas.height = height
+
+    // Copy selected region to temp canvas
+    const imageData = ctx.getImageData(startX, startY, width, height)
+    tempCtx.putImageData(imageData, 0, 0)
+
+    // Apply blur filter and draw back
+    ctx.filter = `blur(${blurRadius}px)`
+    ctx.drawImage(
+      tempCanvas,
+      0,
+      0,
+      width,
+      height,
+      startX,
+      startY,
+      width,
+      height
+    )
+    ctx.filter = 'none' // Reset filter
   }
 
   // Clear selection state
