@@ -119,6 +119,7 @@ const canvas = ref<HTMLCanvasElement>()
 const canvasContainer = ref<HTMLDivElement>()
 const uploadedImage = ref<string | null>(null)
 const processedImage = ref<string | null>(null)
+const originalFileName = ref<string>('')
 const hasSelection = ref(false)
 const isSelecting = ref(false)
 const canUndo = ref(false)
@@ -216,6 +217,7 @@ const handleFileUpload = (event: Event) => {
 }
 
 const processImageFile = (file: File) => {
+  originalFileName.value = file.name
   const reader = new FileReader()
   reader.onload = e => {
     uploadedImage.value = e.target?.result as string
@@ -547,8 +549,30 @@ const undoLastAction = () => {
 const downloadImage = () => {
   if (!processedImage.value) return
 
+  // Generate filename based on original name and processing mode
+  let filename = 'processed-image.png' // fallback
+  if (originalFileName.value) {
+    const lastDotIndex = originalFileName.value.lastIndexOf('.')
+    let basename = originalFileName.value
+    
+    // Extract basename only if there's a valid extension (not just starting with dot)
+    if (lastDotIndex > 0) {
+      basename = originalFileName.value.substring(0, lastDotIndex)
+    } else if (lastDotIndex === 0) {
+      // Handle files starting with dot (like .jpg) - use empty basename
+      basename = ''
+    }
+    // If lastDotIndex === -1, use the whole filename as basename
+    
+    const suffix = processingMode.value === 'blackfill' ? '-blackfill'
+      : processingMode.value === 'whitefill' ? '-whitefill'
+      : processingMode.value === 'mosaic' ? '-mosaic'
+      : '-blur'
+    filename = `${basename}${suffix}.png`
+  }
+
   const link = document.createElement('a')
-  link.download = 'mosaic-image.png'
+  link.download = filename
   link.href = processedImage.value
   link.click()
 }
@@ -578,6 +602,7 @@ const resetToOriginal = () => {
 const resetImage = () => {
   uploadedImage.value = null
   processedImage.value = null
+  originalFileName.value = ''
   hasSelection.value = false
   selection.value.active = false
   canUndo.value = false
