@@ -166,6 +166,39 @@ const updateCanvasMetrics = () => {
   scaleY = canvas.value.height / canvasRect.height
 }
 
+// Resize image if larger than 1920px on longest side
+const resizeImageIfNeeded = (
+  img: HTMLImageElement
+): Promise<HTMLImageElement> => {
+  const maxSize = 1920
+  const maxDimension = Math.max(img.width, img.height)
+
+  if (maxDimension <= maxSize) {
+    return Promise.resolve(img) // No resizing needed
+  }
+
+  return new Promise(resolve => {
+    // Calculate new dimensions maintaining aspect ratio
+    const ratio = maxSize / maxDimension
+    const newWidth = Math.floor(img.width * ratio)
+    const newHeight = Math.floor(img.height * ratio)
+
+    // Create canvas for resizing
+    const resizeCanvas = document.createElement('canvas')
+    const resizeCtx = resizeCanvas.getContext('2d')!
+    resizeCanvas.width = newWidth
+    resizeCanvas.height = newHeight
+
+    // Draw resized image
+    resizeCtx.drawImage(img, 0, 0, newWidth, newHeight)
+
+    // Create new image from resized canvas
+    const resizedImg = new Image()
+    resizedImg.onload = () => resolve(resizedImg)
+    resizedImg.src = resizeCanvas.toDataURL('image/jpeg', 0.9)
+  })
+}
+
 const handleFileUpload = (event: Event) => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
@@ -227,24 +260,36 @@ const loadImageToCanvas = () => {
   if (!uploadedImage.value || !canvas.value) return
 
   const img = new Image()
-  img.onload = () => {
-    currentImage = img
-    const canvasEl = canvas.value!
-    ctx = canvasEl.getContext('2d')!
+  img.onload = async () => {
+    try {
+      // Resize image if needed (max 1920px on longest side)
+      const processedImg = await resizeImageIfNeeded(img)
 
-    // 元の解像度を保持
-    canvasEl.width = img.width
-    canvasEl.height = img.height
+      currentImage = processedImg
+      const canvasEl = canvas.value!
+      ctx = canvasEl.getContext('2d')!
 
-    ctx.drawImage(img, 0, 0, img.width, img.height)
-    originalImageData = ctx.getImageData(0, 0, img.width, img.height)
+      // Use processed image dimensions
+      canvasEl.width = processedImg.width
+      canvasEl.height = processedImg.height
 
-    // Update canvas metrics for optimized coordinate calculations
-    updateCanvasMetrics()
+      ctx.drawImage(processedImg, 0, 0, processedImg.width, processedImg.height)
+      originalImageData = ctx.getImageData(
+        0,
+        0,
+        processedImg.width,
+        processedImg.height
+      )
 
-    // Initialize undo stack - start empty, first edit will add the original state
-    undoStack.value = []
-    canUndo.value = false
+      // Update canvas metrics for optimized coordinate calculations
+      updateCanvasMetrics()
+
+      // Initialize undo stack - start empty, first edit will add the original state
+      undoStack.value = []
+      canUndo.value = false
+    } catch (error) {
+      console.error('Error processing image:', error)
+    }
   }
   img.src = uploadedImage.value
 }
