@@ -280,28 +280,31 @@ const endSelection = (event: MouseEvent | TouchEvent) => {
 const redrawCanvas = () => {
   if (!ctx || !originalImageData) return
 
-  ctx.putImageData(originalImageData, 0, 0)
+  // Only restore image data when not actively selecting
+  if (!isSelecting.value) {
+    ctx.putImageData(originalImageData, 0, 0)
+    return
+  }
+
+  // During selection, use faster clearRect + drawImage approach
+  ctx.clearRect(0, 0, canvas.value!.width, canvas.value!.height)
+  if (currentImage) {
+    ctx.drawImage(currentImage, 0, 0, canvas.value!.width, canvas.value!.height)
+  }
 
   // Show dashed outline only while dragging
-  if (isSelecting.value) {
-    ctx.strokeStyle = '#ff0000'
-    // Calculate dynamic line width based on image size for better visibility
-    const imageShortSide = Math.min(canvas.value!.width, canvas.value!.height)
-    const lineWidth = Math.max(3, Math.floor(imageShortSide / 200))
-    ctx.lineWidth = lineWidth
-    ctx.setLineDash([5, 5])
+  ctx.strokeStyle = '#ff0000'
+  // Calculate dynamic line width based on image size for better visibility
+  const imageShortSide = Math.min(canvas.value!.width, canvas.value!.height)
+  const lineWidth = Math.max(4, Math.floor(imageShortSide / 150))
+  ctx.lineWidth = lineWidth
+  ctx.setLineDash([5, 5])
 
-    const width = selection.value.endX - selection.value.startX
-    const height = selection.value.endY - selection.value.startY
+  const width = selection.value.endX - selection.value.startX
+  const height = selection.value.endY - selection.value.startY
 
-    ctx.strokeRect(
-      selection.value.startX,
-      selection.value.startY,
-      width,
-      height
-    )
-    ctx.setLineDash([])
-  }
+  ctx.strokeRect(selection.value.startX, selection.value.startY, width, height)
+  ctx.setLineDash([])
 }
 
 const applyMosaic = () => {
