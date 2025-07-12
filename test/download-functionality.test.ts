@@ -8,15 +8,20 @@ describe('Download Functionality', () => {
 
     beforeEach(() => {
       originalFileName = ref('')
-      processingMode = ref<'blackfill' | 'whitefill' | 'mosaic' | 'blur'>('blackfill')
+      processingMode = ref<'blackfill' | 'whitefill' | 'mosaic' | 'blur'>(
+        'blackfill'
+      )
     })
 
-    const generateDownloadFilename = (originalName: string, mode: string): string => {
+    const generateDownloadFilename = (
+      originalName: string,
+      mode: string
+    ): string => {
       let filename = 'processed-image.png' // fallback
       if (originalName) {
         const lastDotIndex = originalName.lastIndexOf('.')
         let basename = originalName
-        
+
         // Extract basename only if there's a valid extension (not just starting with dot)
         if (lastDotIndex > 0) {
           basename = originalName.substring(0, lastDotIndex)
@@ -25,11 +30,15 @@ describe('Download Functionality', () => {
           basename = ''
         }
         // If lastDotIndex === -1, use the whole filename as basename
-        
-        const suffix = mode === 'blackfill' ? '-blackfill'
-          : mode === 'whitefill' ? '-whitefill'
-          : mode === 'mosaic' ? '-mosaic'
-          : '-blur'
+
+        const suffix =
+          mode === 'blackfill'
+            ? '-blackfill'
+            : mode === 'whitefill'
+              ? '-whitefill'
+              : mode === 'mosaic'
+                ? '-mosaic'
+                : '-blur'
         filename = `${basename}${suffix}.png`
       }
       return filename
@@ -38,80 +47,110 @@ describe('Download Functionality', () => {
     it('should generate filename with blackfill suffix', () => {
       originalFileName.value = 'photo.jpg'
       processingMode.value = 'blackfill'
-      
-      const filename = generateDownloadFilename(originalFileName.value, processingMode.value)
+
+      const filename = generateDownloadFilename(
+        originalFileName.value,
+        processingMode.value
+      )
       expect(filename).toBe('photo-blackfill.png')
     })
 
     it('should generate filename with whitefill suffix', () => {
       originalFileName.value = 'image.png'
       processingMode.value = 'whitefill'
-      
-      const filename = generateDownloadFilename(originalFileName.value, processingMode.value)
+
+      const filename = generateDownloadFilename(
+        originalFileName.value,
+        processingMode.value
+      )
       expect(filename).toBe('image-whitefill.png')
     })
 
     it('should generate filename with mosaic suffix', () => {
       originalFileName.value = 'document.jpeg'
       processingMode.value = 'mosaic'
-      
-      const filename = generateDownloadFilename(originalFileName.value, processingMode.value)
+
+      const filename = generateDownloadFilename(
+        originalFileName.value,
+        processingMode.value
+      )
       expect(filename).toBe('document-mosaic.png')
     })
 
     it('should generate filename with blur suffix', () => {
       originalFileName.value = 'picture.webp'
       processingMode.value = 'blur'
-      
-      const filename = generateDownloadFilename(originalFileName.value, processingMode.value)
+
+      const filename = generateDownloadFilename(
+        originalFileName.value,
+        processingMode.value
+      )
       expect(filename).toBe('picture-blur.png')
     })
 
     it('should handle filename without extension', () => {
       originalFileName.value = 'filename_without_extension'
       processingMode.value = 'mosaic'
-      
-      const filename = generateDownloadFilename(originalFileName.value, processingMode.value)
+
+      const filename = generateDownloadFilename(
+        originalFileName.value,
+        processingMode.value
+      )
       expect(filename).toBe('filename_without_extension-mosaic.png')
     })
 
     it('should handle filename with multiple dots', () => {
       originalFileName.value = 'file.name.with.dots.jpg'
       processingMode.value = 'blackfill'
-      
-      const filename = generateDownloadFilename(originalFileName.value, processingMode.value)
+
+      const filename = generateDownloadFilename(
+        originalFileName.value,
+        processingMode.value
+      )
       expect(filename).toBe('file.name.with.dots-blackfill.png')
     })
 
     it('should handle filename starting with dot', () => {
       originalFileName.value = '.hidden-file.png'
       processingMode.value = 'blur'
-      
-      const filename = generateDownloadFilename(originalFileName.value, processingMode.value)
+
+      const filename = generateDownloadFilename(
+        originalFileName.value,
+        processingMode.value
+      )
       expect(filename).toBe('.hidden-file-blur.png')
     })
 
     it('should use fallback filename when original is empty', () => {
       originalFileName.value = ''
       processingMode.value = 'mosaic'
-      
-      const filename = generateDownloadFilename(originalFileName.value, processingMode.value)
+
+      const filename = generateDownloadFilename(
+        originalFileName.value,
+        processingMode.value
+      )
       expect(filename).toBe('processed-image.png')
     })
 
     it('should handle very long filenames', () => {
       originalFileName.value = 'a'.repeat(200) + '.jpg'
       processingMode.value = 'blackfill'
-      
-      const filename = generateDownloadFilename(originalFileName.value, processingMode.value)
+
+      const filename = generateDownloadFilename(
+        originalFileName.value,
+        processingMode.value
+      )
       expect(filename).toBe('a'.repeat(200) + '-blackfill.png')
     })
 
     it('should handle special characters in filename', () => {
       originalFileName.value = 'file-name_with@special#chars$.jpg'
       processingMode.value = 'whitefill'
-      
-      const filename = generateDownloadFilename(originalFileName.value, processingMode.value)
+
+      const filename = generateDownloadFilename(
+        originalFileName.value,
+        processingMode.value
+      )
       expect(filename).toBe('file-name_with@special#chars$-whitefill.png')
     })
   })
@@ -141,17 +180,19 @@ describe('Download Functionality', () => {
     it('should store original filename when uploading', () => {
       const filename = 'test-image.jpg'
       processImageFile(filename)
-      
+
       expect(originalFileName.value).toBe(filename)
-      expect(uploadedImage.value).toBe('data:image/png;base64,fake-uploaded-data')
+      expect(uploadedImage.value).toBe(
+        'data:image/png;base64,fake-uploaded-data'
+      )
     })
 
     it('should reset filename when clearing images', () => {
       processImageFile('test-image.jpg')
       expect(originalFileName.value).toBe('test-image.jpg')
-      
+
       resetImage()
-      
+
       expect(originalFileName.value).toBe('')
       expect(uploadedImage.value).toBeNull()
       expect(processedImage.value).toBeNull()
@@ -160,7 +201,7 @@ describe('Download Functionality', () => {
     it('should maintain filename through image processing', () => {
       processImageFile('original.png')
       processedImage.value = 'data:image/png;base64,fake-processed-data'
-      
+
       expect(originalFileName.value).toBe('original.png')
       expect(uploadedImage.value).toBeTruthy()
       expect(processedImage.value).toBeTruthy()
@@ -192,21 +233,24 @@ describe('Download Functionality', () => {
     it('should maintain download state through filename changes', () => {
       processedImage.value = 'data:image/png;base64,processed-data'
       originalFileName.value = 'test.jpg'
-      
+
       expect(canDownload()).toBe(true)
-      
+
       originalFileName.value = 'new-name.png'
       expect(canDownload()).toBe(true)
     })
   })
 
   describe('Edge Cases', () => {
-    const generateDownloadFilename = (originalName: string, mode: string): string => {
+    const generateDownloadFilename = (
+      originalName: string,
+      mode: string
+    ): string => {
       let filename = 'processed-image.png' // fallback
       if (originalName) {
         const lastDotIndex = originalName.lastIndexOf('.')
         let basename = originalName
-        
+
         // Extract basename only if there's a valid extension (not just starting with dot)
         if (lastDotIndex > 0) {
           basename = originalName.substring(0, lastDotIndex)
@@ -215,11 +259,15 @@ describe('Download Functionality', () => {
           basename = ''
         }
         // If lastDotIndex === -1, use the whole filename as basename
-        
-        const suffix = mode === 'blackfill' ? '-blackfill'
-          : mode === 'whitefill' ? '-whitefill'
-          : mode === 'mosaic' ? '-mosaic'
-          : '-blur'
+
+        const suffix =
+          mode === 'blackfill'
+            ? '-blackfill'
+            : mode === 'whitefill'
+              ? '-whitefill'
+              : mode === 'mosaic'
+                ? '-mosaic'
+                : '-blur'
         filename = `${basename}${suffix}.png`
       }
       return filename

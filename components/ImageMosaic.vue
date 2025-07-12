@@ -554,7 +554,7 @@ const downloadImage = () => {
   if (originalFileName.value) {
     const lastDotIndex = originalFileName.value.lastIndexOf('.')
     let basename = originalFileName.value
-    
+
     // Extract basename only if there's a valid extension (not just starting with dot)
     if (lastDotIndex > 0) {
       basename = originalFileName.value.substring(0, lastDotIndex)
@@ -563,11 +563,15 @@ const downloadImage = () => {
       basename = ''
     }
     // If lastDotIndex === -1, use the whole filename as basename
-    
-    const suffix = processingMode.value === 'blackfill' ? '-blackfill'
-      : processingMode.value === 'whitefill' ? '-whitefill'
-      : processingMode.value === 'mosaic' ? '-mosaic'
-      : '-blur'
+
+    const suffix =
+      processingMode.value === 'blackfill'
+        ? '-blackfill'
+        : processingMode.value === 'whitefill'
+          ? '-whitefill'
+          : processingMode.value === 'mosaic'
+            ? '-mosaic'
+            : '-blur'
     filename = `${basename}${suffix}.png`
   }
 
