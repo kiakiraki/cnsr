@@ -142,6 +142,13 @@ let ctx: CanvasRenderingContext2D | null = null
 let originalImageData: ImageData | null = null
 let currentImage: HTMLImageElement | null = null
 
+// Haptic feedback utility
+const triggerHapticFeedback = (pattern: number | number[] = 50) => {
+  if ('vibrate' in navigator) {
+    navigator.vibrate(pattern)
+  }
+}
+
 // Computed properties for performance optimization
 const canvasMetrics = computed(() => {
   if (!canvas.value) return null
@@ -334,6 +341,8 @@ const startSelection = (event: MouseEvent | TouchEvent) => {
   // Ensure canvas metrics are up to date for touch events
   if (event instanceof TouchEvent) {
     updateCanvasMetrics()
+    // Provide haptic feedback for touch selection start
+    triggerHapticFeedback(30)
   }
 
   const pos = getEventPosition(event)
@@ -386,6 +395,10 @@ const endSelection = (event: MouseEvent | TouchEvent) => {
 
   // Auto-apply processing if there's a valid selection
   if (hasSelection.value) {
+    // Provide haptic feedback for successful selection completion on touch devices
+    if (event instanceof TouchEvent) {
+      triggerHapticFeedback([100, 50, 100])
+    }
     applyMosaic()
   }
 }
@@ -517,6 +530,15 @@ const applyMosaic = () => {
 
   // Save the processed image (without any selection overlay)
   processedImage.value = canvas.value!.toDataURL()
+
+  // Provide different haptic feedback patterns based on processing mode
+  const feedbackPatterns = {
+    blackfill: [80],
+    whitefill: [80],
+    mosaic: [50, 30, 50],
+    blur: [100, 20, 100, 20, 100],
+  }
+  triggerHapticFeedback(feedbackPatterns[processingMode.value])
 }
 
 const undoLastAction = () => {
@@ -544,6 +566,9 @@ const undoLastAction = () => {
 
   // Update processed image
   processedImage.value = canvas.value!.toDataURL()
+
+  // Provide haptic feedback for undo action
+  triggerHapticFeedback([30, 20, 30])
 }
 
 const downloadImage = () => {
