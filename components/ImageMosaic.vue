@@ -287,7 +287,7 @@ const redrawCanvas = () => {
     ctx.strokeStyle = '#ff0000'
     // Calculate dynamic line width based on image size for better visibility
     const imageShortSide = Math.min(canvas.value!.width, canvas.value!.height)
-    const lineWidth = Math.max(2, Math.floor(imageShortSide / 400))
+    const lineWidth = Math.max(3, Math.floor(imageShortSide / 200))
     ctx.lineWidth = lineWidth
     ctx.setLineDash([5, 5])
 
