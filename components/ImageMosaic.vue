@@ -391,7 +391,7 @@ const updateSelection = (event: MouseEvent | TouchEvent) => {
     if (event instanceof TouchEvent) {
       const now = Date.now()
       if (now - lastHapticTime >= HAPTIC_INTERVAL) {
-        triggerHapticFeedback(8) // Ultra-light feedback during drag
+        triggerHapticFeedback(5) // Ultra-light feedback during drag
         lastHapticTime = now
       }
     }
