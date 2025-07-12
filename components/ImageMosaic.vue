@@ -332,68 +332,64 @@ const applyMosaic = () => {
     ctx.fillStyle = '#000000'
     ctx.fillRect(startX, startY, width, height)
   } else if (processingMode.value === 'mosaic') {
-    // Apply mosaic effect using fillRect method
-    // Calculate mosaic block size based on image dimensions
-    // Use shorter side as reference to maintain consistent visual effect
+    // Apply mosaic effect using optimized ImageData manipulation
     const imageShortSide = Math.min(canvas.value!.width, canvas.value!.height)
     const mosaicSize = Math.max(1, Math.floor(imageShortSide / 80))
 
+    // Get the entire region data once for better performance
+    const imageData = ctx.getImageData(startX, startY, width, height)
+    const data = imageData.data
+
     for (let y = 0; y < height; y += mosaicSize) {
       for (let x = 0; x < width; x += mosaicSize) {
-        // Get a sample pixel from the center of each block
-        const sampleX = Math.min(
-          startX + x + Math.floor(mosaicSize / 2),
-          startX + width - 1
-        )
-        const sampleY = Math.min(
-          startY + y + Math.floor(mosaicSize / 2),
-          startY + height - 1
-        )
+        // Get sample pixel from center of block
+        const sampleX = Math.min(x + Math.floor(mosaicSize / 2), width - 1)
+        const sampleY = Math.min(y + Math.floor(mosaicSize / 2), height - 1)
+        const sampleIndex = (sampleY * width + sampleX) * 4
 
-        // Get the color data of the sample pixel
-        const imageData = ctx.getImageData(sampleX, sampleY, 1, 1)
-        const pixelData = imageData.data
-        const r = pixelData[0]
-        const g = pixelData[1]
-        const b = pixelData[2]
+        const r = data[sampleIndex]
+        const g = data[sampleIndex + 1]
+        const b = data[sampleIndex + 2]
+        const a = data[sampleIndex + 3]
 
-        // Fill the block with the sampled color
-        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`
+        // Fill block with sampled color directly in ImageData
         const blockWidth = Math.min(mosaicSize, width - x)
         const blockHeight = Math.min(mosaicSize, height - y)
-        ctx.fillRect(startX + x, startY + y, blockWidth, blockHeight)
+
+        for (let by = 0; by < blockHeight; by++) {
+          for (let bx = 0; bx < blockWidth; bx++) {
+            const pixelIndex = ((y + by) * width + (x + bx)) * 4
+            data[pixelIndex] = r
+            data[pixelIndex + 1] = g
+            data[pixelIndex + 2] = b
+            data[pixelIndex + 3] = a
+          }
+        }
       }
     }
+
+    // Put the modified data back to canvas
+    ctx.putImageData(imageData, startX, startY)
   } else if (processingMode.value === 'blur') {
     // Apply Gaussian blur effect using Canvas filter
     // Calculate blur radius based on image size for consistent effect
     const imageShortSide = Math.min(canvas.value!.width, canvas.value!.height)
     const blurRadius = Math.max(2, Math.floor(imageShortSide / 100))
 
-    // Create temporary canvas to apply blur
-    const tempCanvas = document.createElement('canvas')
-    const tempCtx = tempCanvas.getContext('2d')!
-    tempCanvas.width = width
-    tempCanvas.height = height
+    // Save current context state
+    ctx.save()
 
-    // Copy selected region to temp canvas
-    const imageData = ctx.getImageData(startX, startY, width, height)
-    tempCtx.putImageData(imageData, 0, 0)
+    // Create clipping path for selected region only
+    ctx.beginPath()
+    ctx.rect(startX, startY, width, height)
+    ctx.clip()
 
-    // Apply blur filter and draw back
+    // Apply blur filter and redraw the entire canvas within clipped region
     ctx.filter = `blur(${blurRadius}px)`
-    ctx.drawImage(
-      tempCanvas,
-      0,
-      0,
-      width,
-      height,
-      startX,
-      startY,
-      width,
-      height
-    )
-    ctx.filter = 'none' // Reset filter
+    ctx.drawImage(canvas.value!, 0, 0)
+
+    // Restore context state (removes clip and filter)
+    ctx.restore()
   }
 
   // Clear selection state
