@@ -117,12 +117,12 @@ const processedImage = ref<string | null>(null)
 const hasSelection = ref(false)
 const isSelecting = ref(false)
 const canUndo = ref(false)
-const undoStack = ref<ImageData[]>([])
-const MAX_UNDO_LEVELS = 64
+const undoStack = shallowRef<ImageData[]>([])
+const MAX_UNDO_LEVELS = 16
 const processingMode = ref<'blackfill' | 'mosaic'>('blackfill')
 const isDragOver = ref(false)
 
-const selection = ref<SelectionArea>({
+const selection = shallowRef<SelectionArea>({
   startX: 0,
   startY: 0,
   endX: 0,
@@ -133,6 +133,38 @@ const selection = ref<SelectionArea>({
 let ctx: CanvasRenderingContext2D | null = null
 let originalImageData: ImageData | null = null
 let currentImage: HTMLImageElement | null = null
+
+// Computed properties for performance optimization
+const canvasMetrics = computed(() => {
+  if (!canvas.value) return null
+  return {
+    width: canvas.value.width,
+    height: canvas.value.height,
+    shortSide: Math.min(canvas.value.width, canvas.value.height),
+  }
+})
+
+const processingSettings = computed(() => {
+  if (!canvasMetrics.value) return null
+  const { shortSide } = canvasMetrics.value
+  return {
+    mosaicSize: Math.max(1, Math.floor(shortSide / 80)),
+    blurRadius: Math.max(2, Math.floor(shortSide / 100)),
+    lineWidth: Math.max(4, Math.floor(shortSide / 150)),
+  }
+})
+
+// Cache for coordinate calculations
+let canvasRect: DOMRect | null = null
+let scaleX = 1,
+  scaleY = 1
+
+const updateCanvasMetrics = () => {
+  if (!canvas.value) return
+  canvasRect = canvas.value.getBoundingClientRect()
+  scaleX = canvas.value.width / canvasRect.width
+  scaleY = canvas.value.height / canvasRect.height
+}
 
 const handleFileUpload = (event: Event) => {
   const target = event.target as HTMLInputElement
@@ -207,6 +239,9 @@ const loadImageToCanvas = () => {
     ctx.drawImage(img, 0, 0, img.width, img.height)
     originalImageData = ctx.getImageData(0, 0, img.width, img.height)
 
+    // Update canvas metrics for optimized coordinate calculations
+    updateCanvasMetrics()
+
     // Initialize undo stack - start empty, first edit will add the original state
     undoStack.value = []
     canUndo.value = false
@@ -215,9 +250,10 @@ const loadImageToCanvas = () => {
 }
 
 const getEventPosition = (event: MouseEvent | TouchEvent) => {
-  const rect = canvas.value!.getBoundingClientRect()
-  const scaleX = canvas.value!.width / rect.width
-  const scaleY = canvas.value!.height / rect.height
+  // Use cached rect and scale values for better performance
+  if (!canvasRect) {
+    updateCanvasMetrics()
+  }
 
   let clientX: number, clientY: number
 
@@ -230,8 +266,8 @@ const getEventPosition = (event: MouseEvent | TouchEvent) => {
   }
 
   return {
-    x: (clientX - rect.left) * scaleX,
-    y: (clientY - rect.top) * scaleY,
+    x: (clientX - canvasRect!.left) * scaleX,
+    y: (clientY - canvasRect!.top) * scaleY,
   }
 }
 
@@ -251,15 +287,31 @@ const startSelection = (event: MouseEvent | TouchEvent) => {
   hasSelection.value = false
 }
 
+// Throttling for better performance during selection
+let lastUpdateTime = 0
+let animationFrameId: number | null = null
+const THROTTLE_INTERVAL = 16 // 60fps
+
 const updateSelection = (event: MouseEvent | TouchEvent) => {
   event.preventDefault()
   if (!isSelecting.value || !canvas.value) return
 
-  const pos = getEventPosition(event)
-  selection.value.endX = pos.x
-  selection.value.endY = pos.y
+  const now = Date.now()
+  if (now - lastUpdateTime < THROTTLE_INTERVAL && animationFrameId) return
 
-  redrawCanvas()
+  lastUpdateTime = now
+
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId)
+  }
+
+  animationFrameId = requestAnimationFrame(() => {
+    const pos = getEventPosition(event)
+    selection.value.endX = pos.x
+    selection.value.endY = pos.y
+    redrawCanvas()
+    animationFrameId = null
+  })
 }
 
 const endSelection = (event: MouseEvent | TouchEvent) => {
@@ -294,9 +346,8 @@ const redrawCanvas = () => {
 
   // Show dashed outline only while dragging
   ctx.strokeStyle = '#ff0000'
-  // Calculate dynamic line width based on image size for better visibility
-  const imageShortSide = Math.min(canvas.value!.width, canvas.value!.height)
-  const lineWidth = Math.max(4, Math.floor(imageShortSide / 150))
+  // Use computed line width for better performance
+  const lineWidth = processingSettings.value?.lineWidth || 4
   ctx.lineWidth = lineWidth
   ctx.setLineDash([5, 5])
 
@@ -336,8 +387,7 @@ const applyMosaic = () => {
     ctx.fillRect(startX, startY, width, height)
   } else if (processingMode.value === 'mosaic') {
     // Apply mosaic effect using fillRect method for reliability
-    const imageShortSide = Math.min(canvas.value!.width, canvas.value!.height)
-    const mosaicSize = Math.max(1, Math.floor(imageShortSide / 80))
+    const mosaicSize = processingSettings.value?.mosaicSize || 10
 
     for (let y = 0; y < height; y += mosaicSize) {
       for (let x = 0; x < width; x += mosaicSize) {
@@ -367,9 +417,8 @@ const applyMosaic = () => {
     }
   } else if (processingMode.value === 'blur') {
     // Apply Gaussian blur effect using Canvas filter
-    // Calculate blur radius based on image size for consistent effect
-    const imageShortSide = Math.min(canvas.value!.width, canvas.value!.height)
-    const blurRadius = Math.max(2, Math.floor(imageShortSide / 100))
+    // Use computed blur radius for better performance
+    const blurRadius = processingSettings.value?.blurRadius || 5
 
     // Save current context state
     ctx.save()
@@ -477,7 +526,18 @@ const resetImage = () => {
   }
 }
 
-onMounted(() => {})
+onMounted(() => {
+  // Set up ResizeObserver for automatic canvas metrics updates
+  if (canvas.value) {
+    const resizeObserver = new ResizeObserver(() => {
+      updateCanvasMetrics()
+    })
+    resizeObserver.observe(canvas.value)
+
+    // Initial metrics update
+    updateCanvasMetrics()
+  }
+})
 </script>
 
 <style scoped>
