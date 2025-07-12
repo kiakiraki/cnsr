@@ -326,7 +326,10 @@ const applyMosaic = () => {
     ctx.fillRect(startX, startY, width, height)
   } else if (processingMode.value === 'mosaic') {
     // Apply mosaic effect using fillRect method
-    const mosaicSize = 10
+    // Calculate mosaic block size based on image dimensions
+    // Use shorter side as reference to maintain consistent visual effect
+    const imageShortSide = Math.min(canvas.value!.width, canvas.value!.height)
+    const mosaicSize = Math.max(1, Math.floor(imageShortSide / 80))
 
     for (let y = 0; y < height; y += mosaicSize) {
       for (let x = 0; x < width; x += mosaicSize) {
