@@ -366,7 +366,7 @@ const THROTTLE_INTERVAL = 16 // 60fps
 
 // Haptic feedback throttling for drag operations
 let lastHapticTime = 0
-const HAPTIC_INTERVAL = 200 // 200ms between haptic feedback during drag
+const HAPTIC_INTERVAL = 50 // 50ms between haptic feedback during drag
 
 const updateSelection = (event: MouseEvent | TouchEvent) => {
   event.preventDefault()
@@ -391,7 +391,7 @@ const updateSelection = (event: MouseEvent | TouchEvent) => {
     if (event instanceof TouchEvent) {
       const now = Date.now()
       if (now - lastHapticTime >= HAPTIC_INTERVAL) {
-        triggerHapticFeedback(15) // Very light feedback during drag
+        triggerHapticFeedback(8) // Ultra-light feedback during drag
         lastHapticTime = now
       }
     }
