@@ -280,28 +280,31 @@ const endSelection = (event: MouseEvent | TouchEvent) => {
 const redrawCanvas = () => {
   if (!ctx || !originalImageData) return
 
-  ctx.putImageData(originalImageData, 0, 0)
+  // Only restore image data when not actively selecting
+  if (!isSelecting.value) {
+    ctx.putImageData(originalImageData, 0, 0)
+    return
+  }
+
+  // During selection, use faster clearRect + drawImage approach
+  ctx.clearRect(0, 0, canvas.value!.width, canvas.value!.height)
+  if (currentImage) {
+    ctx.drawImage(currentImage, 0, 0, canvas.value!.width, canvas.value!.height)
+  }
 
   // Show dashed outline only while dragging
-  if (isSelecting.value) {
-    ctx.strokeStyle = '#ff0000'
-    // Calculate dynamic line width based on image size for better visibility
-    const imageShortSide = Math.min(canvas.value!.width, canvas.value!.height)
-    const lineWidth = Math.max(3, Math.floor(imageShortSide / 200))
-    ctx.lineWidth = lineWidth
-    ctx.setLineDash([5, 5])
+  ctx.strokeStyle = '#ff0000'
+  // Calculate dynamic line width based on image size for better visibility
+  const imageShortSide = Math.min(canvas.value!.width, canvas.value!.height)
+  const lineWidth = Math.max(4, Math.floor(imageShortSide / 150))
+  ctx.lineWidth = lineWidth
+  ctx.setLineDash([5, 5])
 
-    const width = selection.value.endX - selection.value.startX
-    const height = selection.value.endY - selection.value.startY
+  const width = selection.value.endX - selection.value.startX
+  const height = selection.value.endY - selection.value.startY
 
-    ctx.strokeRect(
-      selection.value.startX,
-      selection.value.startY,
-      width,
-      height
-    )
-    ctx.setLineDash([])
-  }
+  ctx.strokeRect(selection.value.startX, selection.value.startY, width, height)
+  ctx.setLineDash([])
 }
 
 const applyMosaic = () => {
@@ -332,9 +335,7 @@ const applyMosaic = () => {
     ctx.fillStyle = '#000000'
     ctx.fillRect(startX, startY, width, height)
   } else if (processingMode.value === 'mosaic') {
-    // Apply mosaic effect using fillRect method
-    // Calculate mosaic block size based on image dimensions
-    // Use shorter side as reference to maintain consistent visual effect
+    // Apply mosaic effect using fillRect method for reliability
     const imageShortSide = Math.min(canvas.value!.width, canvas.value!.height)
     const mosaicSize = Math.max(1, Math.floor(imageShortSide / 80))
 
@@ -370,30 +371,20 @@ const applyMosaic = () => {
     const imageShortSide = Math.min(canvas.value!.width, canvas.value!.height)
     const blurRadius = Math.max(2, Math.floor(imageShortSide / 100))
 
-    // Create temporary canvas to apply blur
-    const tempCanvas = document.createElement('canvas')
-    const tempCtx = tempCanvas.getContext('2d')!
-    tempCanvas.width = width
-    tempCanvas.height = height
+    // Save current context state
+    ctx.save()
 
-    // Copy selected region to temp canvas
-    const imageData = ctx.getImageData(startX, startY, width, height)
-    tempCtx.putImageData(imageData, 0, 0)
+    // Create clipping path for selected region only
+    ctx.beginPath()
+    ctx.rect(startX, startY, width, height)
+    ctx.clip()
 
-    // Apply blur filter and draw back
+    // Apply blur filter and redraw the entire canvas within clipped region
     ctx.filter = `blur(${blurRadius}px)`
-    ctx.drawImage(
-      tempCanvas,
-      0,
-      0,
-      width,
-      height,
-      startX,
-      startY,
-      width,
-      height
-    )
-    ctx.filter = 'none' // Reset filter
+    ctx.drawImage(canvas.value!, 0, 0)
+
+    // Restore context state (removes clip and filter)
+    ctx.restore()
   }
 
   // Clear selection state
