@@ -45,6 +45,10 @@
             <span>黒塗り</span>
           </label>
           <label class="radio-option">
+            <input v-model="processingMode" type="radio" value="whitefill" />
+            <span>白塗り</span>
+          </label>
+          <label class="radio-option">
             <input v-model="processingMode" type="radio" value="mosaic" />
             <span>モザイク</span>
           </label>
@@ -119,7 +123,9 @@ const isSelecting = ref(false)
 const canUndo = ref(false)
 const undoStack = shallowRef<ImageData[]>([])
 const MAX_UNDO_LEVELS = 16
-const processingMode = ref<'blackfill' | 'mosaic'>('blackfill')
+const processingMode = ref<'blackfill' | 'whitefill' | 'mosaic' | 'blur'>(
+  'blackfill'
+)
 const isDragOver = ref(false)
 
 const selection = shallowRef<SelectionArea>({
@@ -434,6 +440,10 @@ const applyMosaic = () => {
   if (processingMode.value === 'blackfill') {
     // Fill the selected area with black
     ctx.fillStyle = '#000000'
+    ctx.fillRect(startX, startY, width, height)
+  } else if (processingMode.value === 'whitefill') {
+    // Fill the selected area with white
+    ctx.fillStyle = '#ffffff'
     ctx.fillRect(startX, startY, width, height)
   } else if (processingMode.value === 'mosaic') {
     // Apply mosaic effect using fillRect method for reliability
