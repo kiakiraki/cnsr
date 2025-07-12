@@ -343,6 +343,8 @@ const startSelection = (event: MouseEvent | TouchEvent) => {
     updateCanvasMetrics()
     // Provide haptic feedback for touch selection start
     triggerHapticFeedback(30)
+    // Reset haptic timing for drag feedback
+    lastHapticTime = Date.now()
   }
 
   const pos = getEventPosition(event)
@@ -362,6 +364,10 @@ let lastUpdateTime = 0
 let animationFrameId: number | null = null
 const THROTTLE_INTERVAL = 16 // 60fps
 
+// Haptic feedback throttling for drag operations
+let lastHapticTime = 0
+const HAPTIC_INTERVAL = 200 // 200ms between haptic feedback during drag
+
 const updateSelection = (event: MouseEvent | TouchEvent) => {
   event.preventDefault()
   if (!isSelecting.value || !canvas.value) return
@@ -380,6 +386,16 @@ const updateSelection = (event: MouseEvent | TouchEvent) => {
     selection.value.endX = pos.x
     selection.value.endY = pos.y
     redrawCanvas()
+
+    // Provide subtle haptic feedback during drag on touch devices
+    if (event instanceof TouchEvent) {
+      const now = Date.now()
+      if (now - lastHapticTime >= HAPTIC_INTERVAL) {
+        triggerHapticFeedback(15) // Very light feedback during drag
+        lastHapticTime = now
+      }
+    }
+
     animationFrameId = null
   })
 }
