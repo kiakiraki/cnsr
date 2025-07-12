@@ -78,8 +78,9 @@
           元に戻す
         </button>
         <button
-          v-if="processedImage"
+          v-if="uploadedImage"
           class="btn btn-success"
+          :disabled="!processedImage"
           @click="downloadImage"
         >
           ダウンロード
@@ -700,8 +701,14 @@ onMounted(() => {
   color: white;
 }
 
-.btn-success:hover {
+.btn-success:hover:not(:disabled) {
   background-color: #1e7e34;
+}
+
+.btn-success:disabled {
+  background-color: #ccc;
+  color: #666;
+  cursor: not-allowed;
 }
 
 .btn-info {
