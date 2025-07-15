@@ -31,7 +31,7 @@
             <line x1="12" y1="3" x2="12" y2="15" />
           </svg>
           <p>画像をアップロード</p>
-          <p class="upload-hint">クリック または ドラッグ&ドロップ</p>
+          <p class="upload-hint">クリック・ドラッグ&ドロップ・Ctrl+V（ペースト）</p>
         </div>
       </label>
     </div>
@@ -104,7 +104,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 
 interface SelectionArea {
   startX: number
@@ -616,6 +616,24 @@ const resetImage = () => {
   }
 }
 
+// Handle paste events for clipboard image upload
+const handlePaste = (event: ClipboardEvent) => {
+  const items = event.clipboardData?.items
+  if (!items) return
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    if (item.type.startsWith('image/')) {
+      event.preventDefault()
+      const file = item.getAsFile()
+      if (file) {
+        processImageFile(file)
+      }
+      break
+    }
+  }
+}
+
 onMounted(() => {
   // Set up ResizeObserver for automatic canvas metrics updates
   if (canvas.value) {
@@ -627,6 +645,14 @@ onMounted(() => {
     // Initial metrics update
     updateCanvasMetrics()
   }
+
+  // Add paste event listener for clipboard image upload
+  document.addEventListener('paste', handlePaste)
+})
+
+// Clean up event listener on unmount
+onUnmounted(() => {
+  document.removeEventListener('paste', handlePaste)
 })
 </script>
 
