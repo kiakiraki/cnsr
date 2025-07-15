@@ -306,8 +306,8 @@ const loadImageToCanvas = () => {
 }
 
 const getEventPosition = (event: MouseEvent | TouchEvent) => {
-  // For touch events, always get fresh canvas metrics to ensure accuracy
-  if (event instanceof TouchEvent || !canvasRect) {
+  // Update canvas metrics if not available or if it's a touch event (which may have caused layout changes)
+  if (!canvasRect || event instanceof TouchEvent) {
     updateCanvasMetrics()
   }
 
@@ -333,8 +333,8 @@ const startSelection = (event: MouseEvent | TouchEvent) => {
   event.preventDefault()
   if (!canvas.value) return
 
-  // Ensure canvas metrics are up to date for touch events
-  if (event instanceof TouchEvent) {
+  // Ensure canvas metrics are fresh for mouse events at selection start
+  if (event instanceof MouseEvent) {
     updateCanvasMetrics()
   }
 
