@@ -31,7 +31,9 @@
             <line x1="12" y1="3" x2="12" y2="15" />
           </svg>
           <p>画像をアップロード</p>
-          <p class="upload-hint">クリック・ドラッグ&ドロップ・Ctrl+V（ペースト）</p>
+          <p class="upload-hint">
+            クリック・ドラッグ&ドロップ・Ctrl+V（ペースト）
+          </p>
         </div>
       </label>
     </div>
