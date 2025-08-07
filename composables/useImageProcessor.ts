@@ -136,13 +136,15 @@ export function useImageProcessor(
       context.drawImage(canvas.value!, 0, 0)
       context.restore()
     } else if (mode === 'mosaic') {
-      // --- Optimized Mosaic Algorithm ---
+      // --- Optimized fillRect Mosaic Algorithm ---
       const mosaicSize = Math.max(4, Math.floor(shortSide / 80))
+      // Get the image data for the entire selection once to sample from.
       const regionData = context.getImageData(startX, startY, width, height)
       const data = regionData.data
 
       for (let y = 0; y < height; y += mosaicSize) {
         for (let x = 0; x < width; x += mosaicSize) {
+          // Get a sample pixel from the center of the block, relative to the region.
           const sampleX = x + Math.floor(mosaicSize / 2)
           const sampleY = y + Math.floor(mosaicSize / 2)
 
@@ -152,26 +154,14 @@ export function useImageProcessor(
             const g = data[sampleIndex + 1]
             const b = data[sampleIndex + 2]
 
-            for (
-              let blockY = y;
-              blockY < y + mosaicSize && blockY < height;
-              blockY++
-            ) {
-              for (
-                let blockX = x;
-                blockX < x + mosaicSize && blockX < width;
-                blockX++
-              ) {
-                const index = (blockY * width + blockX) * 4
-                data[index] = r
-                data[index + 1] = g
-                data[index + 2] = b
-              }
-            }
+            // Fill the block with the sampled color.
+            context.fillStyle = `rgb(${r}, ${g}, ${b})`
+            const blockWidth = Math.min(mosaicSize, width - x)
+            const blockHeight = Math.min(mosaicSize, height - y)
+            context.fillRect(startX + x, startY + y, blockWidth, blockHeight)
           }
         }
       }
-      context.putImageData(regionData, startX, startY)
     }
 
     originalImageData = context.getImageData(

@@ -152,8 +152,9 @@ const {
   },
   onSelectionEnd: (sel: SelectionArea) => {
     applyProcessing(processingMode.value, sel)
-    // After applying, redraw without the selection box
-    redrawCanvasWithSelection({ ...sel, active: false })
+    // After applying, reset the selection state and redraw to remove the border
+    resetSelection()
+    redrawCanvasWithSelection(selection.value)
   },
 })
 
