@@ -113,6 +113,12 @@ export function useSelection(
     event.preventDefault()
     if (!isSelecting.value) return
 
+    // Cancel any pending update to prevent a redraw after processing.
+    if (animationFrameId) {
+      cancelAnimationFrame(animationFrameId)
+      animationFrameId = null
+    }
+
     isSelecting.value = false
     if (hasSelection.value) {
       options.onSelectionEnd(selection.value)
