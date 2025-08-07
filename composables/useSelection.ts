@@ -1,4 +1,4 @@
-import { ref, shallowRef, computed } from 'vue'
+import { ref, shallowRef } from 'vue'
 import type { Ref } from 'vue'
 
 export interface SelectionArea {
@@ -11,6 +11,12 @@ export interface SelectionArea {
 
 export function useSelection(
   canvas: Ref<HTMLCanvasElement | undefined>,
+  canvasMetrics: Ref<{
+    width: number
+    height: number
+    scaleX: number
+    scaleY: number
+  } | null>,
   options: {
     onSelectionUpdate: () => void
     onSelectionEnd: (selection: SelectionArea) => void
@@ -25,29 +31,13 @@ export function useSelection(
   })
   const isSelecting = ref(false)
 
-  let canvasRect: DOMRect | null = null
-  let scaleX = 1
-  let scaleY = 1
-
-  const hasSelection = computed(() => {
-    if (!selection.value.active) return false
-    return (
-      Math.abs(selection.value.endX - selection.value.startX) > 5 &&
-      Math.abs(selection.value.endY - selection.value.startY) > 5
-    )
-  })
-
-  const updateCanvasMetrics = () => {
-    if (!canvas.value) return
-    canvasRect = canvas.value.getBoundingClientRect()
-    scaleX = canvas.value.width / canvasRect.width
-    scaleY = canvas.value.height / canvasRect.height
-  }
+  let animationFrameId: number | null = null
 
   const getEventPosition = (event: MouseEvent | TouchEvent) => {
-    if (!canvasRect || event instanceof TouchEvent) {
-      updateCanvasMetrics()
-    }
+    if (!canvasMetrics.value) return { x: 0, y: 0 }
+    const canvasEl = canvas.value!
+    const rect = canvasEl.getBoundingClientRect()
+    const { scaleX, scaleY } = canvasMetrics.value
 
     let clientX: number, clientY: number
     if (event instanceof MouseEvent) {
@@ -58,21 +48,14 @@ export function useSelection(
       clientX = touch.clientX
       clientY = touch.clientY
     }
-
-    const x = (clientX - canvasRect!.left) * scaleX
-    const y = (clientY - canvasRect!.top) * scaleY
-
-    return { x, y }
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
+    }
   }
 
   const startSelection = (event: MouseEvent | TouchEvent) => {
     event.preventDefault()
-    if (!canvas.value) return
-
-    if (event instanceof MouseEvent) {
-      updateCanvasMetrics()
-    }
-
     const pos = getEventPosition(event)
     selection.value = {
       startX: pos.x,
@@ -84,26 +67,17 @@ export function useSelection(
     isSelecting.value = true
   }
 
-  let lastUpdateTime = 0
-  let animationFrameId: number | null = null
-  const THROTTLE_INTERVAL = 16 // 60fps
-
   const updateSelection = (event: MouseEvent | TouchEvent) => {
     event.preventDefault()
-    if (!isSelecting.value || !canvas.value) return
-
-    const now = Date.now()
-    if (now - lastUpdateTime < THROTTLE_INTERVAL && animationFrameId) return
-    lastUpdateTime = now
-
-    if (animationFrameId) {
-      cancelAnimationFrame(animationFrameId)
-    }
-
+    if (!isSelecting.value) return
+    if (animationFrameId) cancelAnimationFrame(animationFrameId)
     animationFrameId = requestAnimationFrame(() => {
       const pos = getEventPosition(event)
-      selection.value.endX = pos.x
-      selection.value.endY = pos.y
+      selection.value = {
+        ...selection.value,
+        endX: pos.x,
+        endY: pos.y,
+      }
       options.onSelectionUpdate()
       animationFrameId = null
     })
@@ -113,33 +87,28 @@ export function useSelection(
     event.preventDefault()
     if (!isSelecting.value) return
 
-    // Cancel any pending update to prevent a redraw after processing.
+    // **THE FIX**: Cancel any pending frame to prevent redraw race condition
     if (animationFrameId) {
       cancelAnimationFrame(animationFrameId)
       animationFrameId = null
     }
 
     isSelecting.value = false
-    if (hasSelection.value) {
+    const selWidth = Math.abs(selection.value.endX - selection.value.startX)
+    const selHeight = Math.abs(selection.value.endY - selection.value.startY)
+
+    if (selWidth > 5 && selHeight > 5) {
       options.onSelectionEnd(selection.value)
     }
-    // Reset selection activity after processing
-    selection.value = { ...selection.value, active: false }
-  }
 
-  const resetSelection = () => {
-    selection.value = { startX: 0, startY: 0, endX: 0, endY: 0, active: false }
-    isSelecting.value = false
+    selection.value = { ...selection.value, active: false }
   }
 
   return {
     selection,
     isSelecting,
-    hasSelection,
     startSelection,
     updateSelection,
     endSelection,
-    resetSelection,
-    updateCanvasMetrics,
   }
 }

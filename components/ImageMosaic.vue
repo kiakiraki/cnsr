@@ -68,21 +68,21 @@
         <button
           class="btn btn-info"
           :disabled="!canUndo"
-          @click="handleResetToOriginal"
+          @click="resetToOriginal"
         >
           最初に戻す
         </button>
         <button
           class="btn btn-warning"
           :disabled="!canUndo"
-          @click="handleUndo"
+          @click="undoLastAction"
         >
           元に戻す
         </button>
         <button
           v-if="uploadedImage"
           class="btn btn-success"
-          :disabled="!canUndo"
+          :disabled="!processedImage"
           @click="downloadImage"
         >
           ダウンロード
@@ -107,58 +107,59 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { useSelection } from '~/composables/useSelection'
-import type { SelectionArea } from '~/composables/useSelection'
 import { useUndo } from '~/composables/useUndo'
-import { useImageProcessor } from '~/composables/useImageProcessor'
-import type { ProcessingMode } from '~/composables/useImageProcessor'
+import {
+  useImageProcessor,
+  type ProcessingMode,
+} from '~/composables/useImageProcessor'
+import { useSelection } from '~/composables/useSelection'
 import { generateDownloadFilename } from '~/utils/filename'
 
-// --- Refs and State ---
 const fileInput = ref<HTMLInputElement>()
 const canvas = ref<HTMLCanvasElement>()
-const canvasContainer = ref<HTMLDivElement>()
-
 const uploadedImage = ref<string | null>(null)
+const processedImage = ref<string | null>(null)
 const originalFileName = ref<string>('')
 const processingMode = ref<ProcessingMode>('blackfill')
 const isDragOver = ref(false)
+
+const canvasMetrics = ref<{
+  width: number
+  height: number
+  scaleX: number
+  scaleY: number
+} | null>(null)
 
 // --- Composables ---
 const { canUndo, pushStateToUndoStack, popStateFromUndoStack, clearUndoStack } =
   useUndo()
 
+const { selection, startSelection, updateSelection, endSelection } =
+  useSelection(canvas, canvasMetrics, {
+    onSelectionUpdate: () => {
+      redrawCanvas()
+    },
+    onSelectionEnd: () => {
+      applyProcessing()
+      redrawCanvas() // Final redraw to ensure the border is removed
+    },
+  })
+
 const {
-  loadImage,
-  redrawCanvasWithSelection,
+  loadImageToCanvas,
+  redrawCanvas,
   applyProcessing,
   restoreState,
-  resetToOriginal,
-  getProcessedImage,
-} = useImageProcessor(canvas, {
+  resetToOriginal: resetProcessor,
+} = useImageProcessor(canvas, processingMode, selection, {
+  onProcessingComplete: newImage => {
+    processedImage.value = newImage
+  },
   pushStateToUndoStack,
 })
 
-const {
-  selection,
-  startSelection,
-  updateSelection,
-  endSelection,
-  resetSelection,
-  updateCanvasMetrics,
-} = useSelection(canvas, {
-  onSelectionUpdate: () => {
-    redrawCanvasWithSelection(selection.value)
-  },
-  onSelectionEnd: (sel: SelectionArea) => {
-    applyProcessing(processingMode.value, sel)
-    // After applying, reset the selection state and redraw to remove the border
-    resetSelection()
-    redrawCanvasWithSelection(selection.value)
-  },
-})
+// --- Event Handlers & Component Logic ---
 
-// --- Event Handlers ---
 const handleFileUpload = (event: Event) => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
@@ -167,99 +168,111 @@ const handleFileUpload = (event: Event) => {
   }
 }
 
-const processImageFile = (file: File) => {
+const processImageFile = async (file: File) => {
   originalFileName.value = file.name
   const reader = new FileReader()
-  reader.onload = e => {
+  reader.onload = async e => {
     uploadedImage.value = e.target?.result as string
-    nextTick(async () => {
-      await loadImage(uploadedImage.value!)
-      updateCanvasMetrics()
+    await nextTick()
+    const metrics = await loadImageToCanvas(uploadedImage.value!)
+    if (metrics) {
+      canvasMetrics.value = metrics
       clearUndoStack()
-    })
+      processedImage.value = null
+    }
   }
   reader.readAsDataURL(file)
+}
+
+const handleDragEnter = (event: DragEvent) => {
+  event.preventDefault()
+  isDragOver.value = true
+}
+
+const handleDragOver = (event: DragEvent) => {
+  event.preventDefault()
+  isDragOver.value = true
+}
+
+const handleDragLeave = (event: DragEvent) => {
+  event.preventDefault()
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  if (
+    event.clientX < rect.left ||
+    event.clientX > rect.right ||
+    event.clientY < rect.top ||
+    event.clientY > rect.bottom
+  ) {
+    isDragOver.value = false
+  }
 }
 
 const handleDrop = (event: DragEvent) => {
   event.preventDefault()
   isDragOver.value = false
-  const file = event.dataTransfer?.files?.[0]
-  if (file && file.type.startsWith('image/')) {
-    processImageFile(file)
-  }
-}
-
-const handlePaste = (event: ClipboardEvent) => {
-  const item = event.clipboardData?.items[0]
-  if (item && item.type.startsWith('image/')) {
-    event.preventDefault()
-    const file = item.getAsFile()
-    if (file) {
+  const files = event.dataTransfer?.files
+  if (files && files.length > 0) {
+    const file = files[0]
+    if (file.type.startsWith('image/')) {
       processImageFile(file)
     }
   }
 }
 
-const handleUndo = () => {
-  const lastState = popStateFromUndoStack()
-  if (lastState) {
-    restoreState(lastState)
+const undoLastAction = () => {
+  const previousState = popStateFromUndoStack()
+  if (previousState) {
+    restoreState(previousState)
+    processedImage.value = canvas.value?.toDataURL() ?? null
   }
 }
 
-const handleResetToOriginal = () => {
-  resetToOriginal()
-  clearUndoStack()
-}
-
 const downloadImage = () => {
-  const dataUrl = getProcessedImage()
-  if (!dataUrl) return
-
+  if (!processedImage.value) return
   const filename = generateDownloadFilename(
     originalFileName.value,
     processingMode.value
   )
-
   const link = document.createElement('a')
   link.download = filename
-  link.href = dataUrl
+  link.href = processedImage.value
   link.click()
+}
+
+const resetToOriginal = () => {
+  resetProcessor()
+  clearUndoStack()
+  processedImage.value = canvas.value?.toDataURL() ?? null
 }
 
 const resetImage = () => {
   uploadedImage.value = null
+  processedImage.value = null
   originalFileName.value = ''
+  clearUndoStack()
   if (fileInput.value) {
     fileInput.value.value = ''
   }
-  clearUndoStack()
-  resetSelection()
 }
 
-// --- Drag and Drop State ---
-const handleDragEnter = (e: DragEvent) => {
-  e.preventDefault()
-  isDragOver.value = true
-}
-const handleDragOver = (e: DragEvent) => {
-  e.preventDefault()
-  isDragOver.value = true
-}
-const handleDragLeave = (e: DragEvent) => {
-  e.preventDefault()
-  isDragOver.value = false
-}
+const handlePaste = (event: ClipboardEvent) => {
+  const items = event.clipboardData?.items
+  if (!items) return
 
-// --- Lifecycle Hooks ---
-onMounted(() => {
-  if (canvas.value) {
-    const resizeObserver = new ResizeObserver(() => {
-      updateCanvasMetrics()
-    })
-    resizeObserver.observe(canvas.value)
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    if (item.type.startsWith('image/')) {
+      event.preventDefault()
+      const file = item.getAsFile()
+      if (file) {
+        processImageFile(file)
+      }
+      break
+    }
   }
+}
+
+onMounted(() => {
   document.addEventListener('paste', handlePaste)
 })
 
@@ -269,6 +282,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* Styles are unchanged */
 .image-mosaic-container {
   max-width: 1200px;
   margin: 0 auto;

@@ -1,57 +1,22 @@
 import type { Ref } from 'vue'
-import type { SelectionArea } from './useSelection'
+import type { SelectionArea } from './useSelection' // This will be created later
 
 export type ProcessingMode = 'blackfill' | 'whitefill' | 'mosaic' | 'blur'
 
+// Note: This composable will be tightly coupled with the component's state for now.
+// A fuller refactor would make it more independent, but this is a step-by-step process.
 export function useImageProcessor(
   canvas: Ref<HTMLCanvasElement | undefined>,
-  options: {
+  processingMode: Ref<ProcessingMode>,
+  selection: Ref<SelectionArea>,
+  hooks: {
+    onProcessingComplete: (processedImage: string) => void
     pushStateToUndoStack: (state: ImageData) => void
   }
 ) {
   let ctx: CanvasRenderingContext2D | null = null
   let originalImageData: ImageData | null = null
   let currentImage: HTMLImageElement | null = null
-
-  const getContext = (): CanvasRenderingContext2D | null => {
-    if (ctx) return ctx
-    if (canvas.value) {
-      ctx = canvas.value.getContext('2d')
-    }
-    return ctx
-  }
-
-  const loadImage = async (imageSrc: string): Promise<HTMLImageElement> => {
-    const img = new Image()
-    img.src = imageSrc
-
-    await new Promise(resolve => {
-      img.onload = resolve
-    })
-
-    const processedImg = await resizeImageIfNeeded(img)
-    currentImage = processedImg
-    const canvasEl = canvas.value!
-    const context = getContext()!
-
-    canvasEl.width = processedImg.width
-    canvasEl.height = processedImg.height
-
-    context.drawImage(
-      processedImg,
-      0,
-      0,
-      processedImg.width,
-      processedImg.height
-    )
-    originalImageData = context.getImageData(
-      0,
-      0,
-      processedImg.width,
-      processedImg.height
-    )
-    return processedImg
-  }
 
   const resizeImageIfNeeded = (
     img: HTMLImageElement
@@ -67,116 +32,136 @@ export function useImageProcessor(
       const ratio = maxSize / maxDimension
       const newWidth = Math.floor(img.width * ratio)
       const newHeight = Math.floor(img.height * ratio)
-
       const resizeCanvas = document.createElement('canvas')
       const resizeCtx = resizeCanvas.getContext('2d')!
       resizeCanvas.width = newWidth
       resizeCanvas.height = newHeight
-
       resizeCtx.drawImage(img, 0, 0, newWidth, newHeight)
-
       const resizedImg = new Image()
       resizedImg.onload = () => resolve(resizedImg)
       resizedImg.src = resizeCanvas.toDataURL('image/jpeg', 0.9)
     })
   }
 
-  const redrawCanvasWithSelection = (selection: SelectionArea) => {
-    const context = getContext()
-    if (!context || !originalImageData) return
+  const loadImageToCanvas = async (imageSrc: string) => {
+    if (!canvas.value) return null
 
-    context.putImageData(originalImageData, 0, 0)
+    const img = new Image()
+    img.src = imageSrc
+    await new Promise(resolve => {
+      img.onload = resolve
+    })
 
-    if (selection.active) {
-      context.strokeStyle = '#ff0000'
-      const shortSide = Math.min(canvas.value!.width, canvas.value!.height)
-      context.lineWidth = Math.max(4, Math.floor(shortSide / 150))
-      context.setLineDash([5, 5])
-      const width = selection.endX - selection.startX
-      const height = selection.endY - selection.startY
-      context.strokeRect(selection.startX, selection.startY, width, height)
-      context.setLineDash([])
+    const processedImg = await resizeImageIfNeeded(img)
+    currentImage = processedImg
+    const canvasEl = canvas.value
+    ctx = canvasEl.getContext('2d')!
+    canvasEl.width = processedImg.width
+    canvasEl.height = processedImg.height
+    ctx.drawImage(processedImg, 0, 0, processedImg.width, processedImg.height)
+    originalImageData = ctx.getImageData(
+      0,
+      0,
+      processedImg.width,
+      processedImg.height
+    )
+
+    const canvasRect = canvas.value!.getBoundingClientRect()
+    return {
+      width: canvasEl.width,
+      height: canvasEl.height,
+      scaleX: canvasEl.width / canvasRect.width,
+      scaleY: canvasEl.height / canvasRect.height,
     }
   }
 
-  const applyProcessing = (mode: ProcessingMode, selection: SelectionArea) => {
-    const context = getContext()
-    if (!context || !originalImageData) return
+  const redrawCanvas = () => {
+    if (!ctx || !originalImageData) return
+    ctx.putImageData(originalImageData, 0, 0)
 
-    // Save a copy of the current state to the undo stack
-    const currentState = new ImageData(
-      new Uint8ClampedArray(originalImageData.data),
-      originalImageData.width,
-      originalImageData.height
-    )
-    options.pushStateToUndoStack(currentState)
+    if (selection.value.active) {
+      ctx.strokeStyle = '#ff0000'
+      const shortSide = Math.min(canvas.value!.width, canvas.value!.height)
+      ctx.lineWidth = Math.max(4, Math.floor(shortSide / 150))
+      ctx.setLineDash([5, 5])
+      const width = selection.value.endX - selection.value.startX
+      const height = selection.value.endY - selection.value.startY
+      ctx.strokeRect(
+        selection.value.startX,
+        selection.value.startY,
+        width,
+        height
+      )
+      ctx.setLineDash([])
+    }
+  }
 
-    const startX = Math.min(selection.startX, selection.endX)
-    const startY = Math.min(selection.startY, selection.endY)
-    const width = Math.abs(selection.endX - selection.startX)
-    const height = Math.abs(selection.endY - selection.startY)
+  const applyProcessing = () => {
+    if (!ctx || !originalImageData) return
 
-    if (width === 0 || height === 0) return
+    hooks.pushStateToUndoStack(originalImageData)
+
+    const startX = Math.min(selection.value.startX, selection.value.endX)
+    const startY = Math.min(selection.value.startY, selection.value.endY)
+    const width = Math.abs(selection.value.endX - selection.value.startX)
+    const height = Math.abs(selection.value.endY - selection.value.startY)
+    if (width < 5 || height < 5) return
 
     const shortSide = Math.min(canvas.value!.width, canvas.value!.height)
 
-    if (mode === 'blackfill') {
-      context.fillStyle = '#000000'
-      context.fillRect(startX, startY, width, height)
-    } else if (mode === 'whitefill') {
-      context.fillStyle = '#ffffff'
-      context.fillRect(startX, startY, width, height)
-    } else if (mode === 'blur') {
+    if (processingMode.value === 'blackfill') {
+      ctx.fillStyle = '#000000'
+      ctx.fillRect(startX, startY, width, height)
+    } else if (processingMode.value === 'whitefill') {
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(startX, startY, width, height)
+    } else if (processingMode.value === 'blur') {
       const blurRadius = Math.max(2, Math.floor(shortSide / 100))
-      context.save()
-      context.beginPath()
-      context.rect(startX, startY, width, height)
-      context.clip()
-      context.filter = `blur(${blurRadius}px)`
-      context.drawImage(canvas.value!, 0, 0)
-      context.restore()
-    } else if (mode === 'mosaic') {
-      // --- Optimized fillRect Mosaic Algorithm ---
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(startX, startY, width, height)
+      ctx.clip()
+      ctx.filter = `blur(${blurRadius}px)`
+      ctx.drawImage(canvas.value!, 0, 0)
+      ctx.restore()
+    } else if (processingMode.value === 'mosaic') {
       const mosaicSize = Math.max(4, Math.floor(shortSide / 80))
-      // Get the image data for the entire selection once to sample from.
-      const regionData = context.getImageData(startX, startY, width, height)
+      const regionData = ctx.getImageData(startX, startY, width, height)
       const data = regionData.data
-
       for (let y = 0; y < height; y += mosaicSize) {
         for (let x = 0; x < width; x += mosaicSize) {
-          // Get a sample pixel from the center of the block, relative to the region.
           const sampleX = x + Math.floor(mosaicSize / 2)
           const sampleY = y + Math.floor(mosaicSize / 2)
-
           if (sampleX < width && sampleY < height) {
             const sampleIndex = (sampleY * width + sampleX) * 4
             const r = data[sampleIndex]
             const g = data[sampleIndex + 1]
             const b = data[sampleIndex + 2]
-
-            // Fill the block with the sampled color.
-            context.fillStyle = `rgb(${r}, ${g}, ${b})`
-            const blockWidth = Math.min(mosaicSize, width - x)
-            const blockHeight = Math.min(mosaicSize, height - y)
-            context.fillRect(startX + x, startY + y, blockWidth, blockHeight)
+            ctx.fillStyle = `rgb(${r}, ${g}, ${b})`
+            ctx.fillRect(
+              startX + x,
+              startY + y,
+              Math.min(mosaicSize, width - x),
+              Math.min(mosaicSize, height - y)
+            )
           }
         }
       }
     }
 
-    originalImageData = context.getImageData(
+    originalImageData = ctx.getImageData(
       0,
       0,
       canvas.value!.width,
       canvas.value!.height
     )
+    hooks.onProcessingComplete(canvas.value!.toDataURL())
   }
 
   const restoreState = (state: ImageData) => {
-    const context = getContext()
-    if (!context) return
-    context.putImageData(state, 0, 0)
-    originalImageData = context.getImageData(
+    if (!ctx) return
+    ctx.putImageData(state, 0, 0)
+    originalImageData = ctx.getImageData(
       0,
       0,
       canvas.value!.width,
@@ -185,35 +170,22 @@ export function useImageProcessor(
   }
 
   const resetToOriginal = () => {
-    const context = getContext()
-    if (!context || !currentImage) return
-    context.clearRect(0, 0, canvas.value!.width, canvas.value!.height)
-    context.drawImage(
-      currentImage,
+    if (!ctx || !currentImage) return
+    ctx.clearRect(0, 0, canvas.value!.width, canvas.value!.height)
+    ctx.drawImage(currentImage, 0, 0, canvas.value!.width, canvas.value!.height)
+    originalImageData = ctx.getImageData(
       0,
       0,
       canvas.value!.width,
       canvas.value!.height
     )
-    originalImageData = context.getImageData(
-      0,
-      0,
-      canvas.value!.width,
-      canvas.value!.height
-    )
-  }
-
-  const getProcessedImage = (): string | null => {
-    if (!canvas.value) return null
-    return canvas.value.toDataURL()
   }
 
   return {
-    loadImage,
-    redrawCanvasWithSelection,
+    loadImageToCanvas,
+    redrawCanvas,
     applyProcessing,
     restoreState,
     resetToOriginal,
-    getProcessedImage,
   }
 }

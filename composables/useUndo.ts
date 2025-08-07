@@ -33,6 +33,7 @@ export function useUndo() {
 
   return {
     canUndo,
+    undoStack, // Exposing for potential debugging or advanced features, though not used by component
     pushStateToUndoStack,
     popStateFromUndoStack,
     clearUndoStack,

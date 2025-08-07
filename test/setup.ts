@@ -57,19 +57,21 @@ global.FileReader = vi.fn(() => ({
 // Mock Image
 global.Image = vi.fn(() => {
   const img = {
-    src: '',
+    _onload: null as (() => void) | null,
     width: 100,
     height: 100,
-    onload: null as (() => void) | null,
+    src: '',
   }
-  // Immediately trigger onload when it's set
   Object.defineProperty(img, 'onload', {
-    set(value) {
-      if (typeof value === 'function') {
-        // Use a timeout to simulate async loading, preventing infinite loops
-        // if onload is set inside another onload.
-        setTimeout(value, 0)
+    set(callback) {
+      this._onload = callback
+      if (this._onload) {
+        // Use setTimeout to simulate async loading and avoid infinite loops
+        setTimeout(() => this._onload(), 0)
       }
+    },
+    get() {
+      return this._onload
     },
   })
   return img
