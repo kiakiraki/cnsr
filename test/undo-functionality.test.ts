@@ -1,339 +1,186 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
+import { useUndo } from '~/composables/useUndo'
+import { useImageProcessor } from '~/composables/useImageProcessor'
+import type { SelectionArea } from '~/composables/useSelection'
 
-describe('Undo Functionality', () => {
-  let undoStack: { value: ImageData[] }
-  let canUndo: { value: boolean }
-  let mockCanvas: {
-    value: {
-      width: number
-      height: number
-      getContext: () => CanvasRenderingContext2D
-    }
-  }
-  let mockCtx: CanvasRenderingContext2D | null
-  let originalImageData: ImageData | null
-  const MAX_UNDO_LEVELS = 64
+// Mock ImageData
+const createMockImageData = (id: number): ImageData => ({
+  data: new Uint8ClampedArray([id, 0, 0, 255]),
+  width: 10,
+  height: 10,
+  colorSpace: 'srgb',
+})
+
+describe('Undo/Redo Integration', () => {
+  let mockCanvas: any
+  let mockContext: any
 
   beforeEach(() => {
-    undoStack = ref<ImageData[]>([])
-    canUndo = ref(false)
-    originalImageData = {
-      data: new Uint8ClampedArray([255, 255, 255, 255]), // White pixel
-      width: 1,
-      height: 1,
-    }
-
-    mockCtx = {
+    mockContext = {
       putImageData: vi.fn(),
-      getImageData: vi.fn(() => originalImageData),
-      fillStyle: '',
+      getImageData: vi.fn((x, y, w, h) => createMockImageData(1)),
+      drawImage: vi.fn(),
+      clearRect: vi.fn(),
+      save: vi.fn(),
+      restore: vi.fn(),
+      beginPath: vi.fn(),
+      rect: vi.fn(),
+      clip: vi.fn(),
       fillRect: vi.fn(),
+      filter: '',
+    }
+    mockCanvas = ref({
+      width: 10,
+      height: 10,
+      getContext: () => mockContext,
+      toDataURL: () => 'data:image/png;base64,fake',
+    })
+  })
+
+  it('should push state to undo stack when processing is applied', async () => {
+    const { canUndo, pushStateToUndoStack, popStateFromUndoStack } = useUndo()
+    const processor = useImageProcessor(mockCanvas, {
+      pushStateToUndoStack,
+    })
+    await processor.loadImage('fake-src')
+
+    expect(canUndo.value).toBe(false)
+
+    const selection: SelectionArea = {
+      startX: 0,
+      startY: 0,
+      endX: 5,
+      endY: 5,
+      active: true,
+    }
+    processor.applyProcessing('blackfill', selection)
+
+    expect(canUndo.value).toBe(true)
+    const undoneState = popStateFromUndoStack()
+    expect(undoneState).toBeDefined()
+    expect(undoneState?.width).toBe(10)
+    expect(undoneState?.height).toBe(10)
+  })
+
+  it('should restore previous state on undo', async () => {
+    const { canUndo, pushStateToUndoStack, popStateFromUndoStack } = useUndo()
+    const processor = useImageProcessor(mockCanvas, {
+      pushStateToUndoStack,
+    })
+    await processor.loadImage('fake-src')
+
+    const selection: SelectionArea = {
+      startX: 0,
+      startY: 0,
+      endX: 5,
+      endY: 5,
+      active: true,
+    }
+    processor.applyProcessing('blackfill', selection)
+
+    const lastState = popStateFromUndoStack()
+    expect(lastState).toBeDefined()
+
+    if (lastState) {
+      processor.restoreState(lastState)
     }
 
-    mockCanvas = {
-      value: {
-        width: 800,
-        height: 600,
-        getContext: vi.fn(() => mockCtx),
-      },
+    expect(mockContext.putImageData).toHaveBeenCalledWith(lastState, 0, 0)
+    expect(canUndo.value).toBe(false)
+  })
+
+  it('should handle multiple undos', async () => {
+    const { popStateFromUndoStack, ...undoFns } = useUndo()
+    const processor = useImageProcessor(mockCanvas, {
+      pushStateToUndoStack: undoFns.pushStateToUndoStack,
+    })
+    await processor.loadImage('fake-src')
+
+    const selection: SelectionArea = {
+      startX: 0,
+      startY: 0,
+      endX: 5,
+      endY: 5,
+      active: true,
     }
+    // 1. Initial state is loaded. originalImageData has id=1 from the default mock.
+
+    // 2. First action.
+    // applyProcessing will update originalImageData at the end. We mock this call.
+    mockContext.getImageData.mockReturnValueOnce(createMockImageData(2))
+    processor.applyProcessing('blackfill', selection) // Pushes copy of id=1. originalImageData becomes id=2.
+
+    // 3. Second action.
+    // Mock the next update call.
+    mockContext.getImageData.mockReturnValueOnce(createMockImageData(3))
+    processor.applyProcessing('mosaic', selection) // Pushes copy of id=2. originalImageData becomes id=3.
+
+    // 4. Undo the second operation, which should restore the state with id=2.
+    let lastState = popStateFromUndoStack()
+    expect(lastState?.data[0]).toBe(2)
+    if (lastState) processor.restoreState(lastState)
+
+    // 5. Undo the first operation, should restore initial state with id=1
+    lastState = popStateFromUndoStack()
+    expect(lastState?.data[0]).toBe(1)
+    if (lastState) processor.restoreState(lastState)
+
+    // Stack should be empty now
+    lastState = popStateFromUndoStack()
+    expect(lastState).toBeUndefined()
   })
 
-  const addToUndoStack = (imageData: ImageData | null) => {
-    undoStack.value.push(imageData)
-    if (undoStack.value.length > MAX_UNDO_LEVELS) {
-      undoStack.value.shift()
+  it('should respect MAX_UNDO_LEVELS (16)', async () => {
+    const { pushStateToUndoStack, popStateFromUndoStack } = useUndo()
+    const processor = useImageProcessor(mockCanvas, {
+      pushStateToUndoStack,
+    })
+    await processor.loadImage('fake-src')
+    const MAX_UNDO_LEVELS = 16
+
+    const selection: SelectionArea = {
+      startX: 0,
+      startY: 0,
+      endX: 1,
+      endY: 1,
+      active: true,
     }
-    canUndo.value = undoStack.value.length > 0
-  }
 
-  const applyProcessing = (processType: 'blackfill' | 'mosaic') => {
-    // Save current state to undo stack before making changes
-    const currentState = mockCtx.getImageData(
-      0,
-      0,
-      mockCanvas.value.width,
-      mockCanvas.value.height
-    )
-    addToUndoStack(currentState)
-
-    // Apply processing (mocked)
-    if (processType === 'blackfill') {
-      mockCtx.fillStyle = '#000000'
-      mockCtx.fillRect(0, 0, 100, 100)
-    } else if (processType === 'mosaic') {
-      // Mock mosaic processing
-      mockCtx.fillStyle = '#888888'
-      mockCtx.fillRect(0, 0, 100, 100)
+    for (let i = 0; i < MAX_UNDO_LEVELS + 5; i++) {
+      mockContext.getImageData.mockReturnValue(createMockImageData(i + 1))
+      processor.applyProcessing('blackfill', selection)
     }
 
-    // Update original image data
-    originalImageData = mockCtx.getImageData(
-      0,
-      0,
-      mockCanvas.value.width,
-      mockCanvas.value.height
-    )
-  }
-
-  const undoLastAction = () => {
-    if (!mockCtx || undoStack.value.length <= 0) return false
-
-    const previousState = undoStack.value.pop()
-    mockCtx.putImageData(previousState, 0, 0)
-
-    originalImageData = mockCtx.getImageData(
-      0,
-      0,
-      mockCanvas.value.width,
-      mockCanvas.value.height
-    )
-
-    canUndo.value = undoStack.value.length > 0
-    return true
-  }
-
-  const resetToOriginal = () => {
-    if (!mockCtx) return
-
-    // Clear canvas and redraw original image
-    mockCtx.putImageData(originalImageData, 0, 0)
-
-    // Reset undo stack
-    undoStack.value = []
-    canUndo.value = false
-  }
-
-  describe('Undo Stack Management', () => {
-    it('should initialize with empty undo stack', () => {
-      expect(undoStack.value.length).toBe(0)
-      expect(canUndo.value).toBe(false)
-    })
-
-    it('should add state to undo stack when processing is applied', () => {
-      applyProcessing('blackfill')
-
-      expect(undoStack.value.length).toBe(1)
-      expect(canUndo.value).toBe(true)
-      expect(mockCtx.getImageData).toHaveBeenCalled()
-    })
-
-    it('should maintain undo stack size limit', () => {
-      // Apply processing more than MAX_UNDO_LEVELS times
-      for (let i = 0; i < MAX_UNDO_LEVELS + 5; i++) {
-        applyProcessing('blackfill')
-      }
-
-      expect(undoStack.value.length).toBe(MAX_UNDO_LEVELS)
-      expect(canUndo.value).toBe(true)
-    })
-
-    it('should remove oldest entries when exceeding limit', () => {
-      const firstState = { data: 'first-state' }
-      // Remove unused variable
-
-      // Manually add to test limit behavior
-      undoStack.value.push(firstState)
-
-      // Fill stack to maximum
-      for (let i = 0; i < MAX_UNDO_LEVELS; i++) {
-        addToUndoStack({
-          data: new Uint8ClampedArray([i, i, i, 255]),
-          width: 1,
-          height: 1,
-        } as ImageData)
-      }
-
-      expect(undoStack.value.length).toBe(MAX_UNDO_LEVELS)
-      expect(undoStack.value[0]).not.toEqual(firstState) // First entry should be removed
-    })
+    let count = 0
+    while(popStateFromUndoStack()) {
+      count++
+    }
+    expect(count).toBe(MAX_UNDO_LEVELS)
   })
 
-  describe('Undo Operations', () => {
-    it('should undo last action successfully', () => {
-      applyProcessing('blackfill')
-      const result = undoLastAction()
-
-      expect(result).toBe(true)
-      expect(mockCtx.putImageData).toHaveBeenCalled()
-      expect(undoStack.value.length).toBe(0)
-      expect(canUndo.value).toBe(false)
+  it('should clear undo stack on resetToOriginal', async () => {
+    const { canUndo, clearUndoStack, pushStateToUndoStack } = useUndo()
+    const processor = useImageProcessor(mockCanvas, {
+      pushStateToUndoStack,
     })
+    await processor.loadImage('fake-src')
 
-    it('should not undo when stack is empty', () => {
-      const result = undoLastAction()
+    const selection: SelectionArea = {
+      startX: 0,
+      startY: 0,
+      endX: 5,
+      endY: 5,
+      active: true,
+    }
+    processor.applyProcessing('blackfill', selection)
+    expect(canUndo.value).toBe(true)
 
-      expect(result).toBe(false)
-      expect(mockCtx.putImageData).not.toHaveBeenCalled()
-      expect(canUndo.value).toBe(false)
-    })
+    processor.resetToOriginal()
+    clearUndoStack()
 
-    it('should handle multiple undo operations', () => {
-      applyProcessing('blackfill')
-      applyProcessing('mosaic')
-      applyProcessing('blackfill')
-
-      expect(undoStack.value.length).toBe(3)
-      expect(canUndo.value).toBe(true)
-
-      // First undo
-      undoLastAction()
-      expect(undoStack.value.length).toBe(2)
-      expect(canUndo.value).toBe(true)
-
-      // Second undo
-      undoLastAction()
-      expect(undoStack.value.length).toBe(1)
-      expect(canUndo.value).toBe(true)
-
-      // Third undo
-      undoLastAction()
-      expect(undoStack.value.length).toBe(0)
-      expect(canUndo.value).toBe(false)
-    })
-
-    it('should restore correct image data on undo', () => {
-      const mockImageData = {
-        data: new Uint8ClampedArray([255, 0, 0, 255]), // Red pixel
-        width: 1,
-        height: 1,
-      }
-
-      // Mock getImageData to return specific data
-      mockCtx.getImageData.mockReturnValue(mockImageData)
-
-      applyProcessing('blackfill')
-      undoLastAction()
-
-      expect(mockCtx.putImageData).toHaveBeenCalledWith(mockImageData, 0, 0)
-    })
-  })
-
-  describe('Reset to Original', () => {
-    it('should reset to original state', () => {
-      applyProcessing('blackfill')
-      applyProcessing('mosaic')
-
-      expect(undoStack.value.length).toBe(2)
-      expect(canUndo.value).toBe(true)
-
-      resetToOriginal()
-
-      expect(undoStack.value.length).toBe(0)
-      expect(canUndo.value).toBe(false)
-      expect(mockCtx.putImageData).toHaveBeenCalled()
-    })
-
-    it('should clear undo stack on reset', () => {
-      applyProcessing('blackfill')
-      applyProcessing('mosaic')
-      applyProcessing('blackfill')
-
-      resetToOriginal()
-
-      expect(undoStack.value.length).toBe(0)
-      expect(canUndo.value).toBe(false)
-    })
-  })
-
-  describe('Processing Integration', () => {
-    it('should save state before blackfill processing', () => {
-      applyProcessing('blackfill')
-
-      expect(mockCtx.getImageData).toHaveBeenCalledWith(
-        0,
-        0,
-        mockCanvas.value.width,
-        mockCanvas.value.height
-      )
-      expect(mockCtx.fillStyle).toBe('#000000')
-      expect(mockCtx.fillRect).toHaveBeenCalled()
-      expect(undoStack.value.length).toBe(1)
-      expect(canUndo.value).toBe(true)
-    })
-
-    it('should save state before mosaic processing', () => {
-      applyProcessing('mosaic')
-
-      expect(mockCtx.getImageData).toHaveBeenCalledWith(
-        0,
-        0,
-        mockCanvas.value.width,
-        mockCanvas.value.height
-      )
-      expect(mockCtx.fillStyle).toBe('#888888')
-      expect(mockCtx.fillRect).toHaveBeenCalled()
-      expect(undoStack.value.length).toBe(1)
-      expect(canUndo.value).toBe(true)
-    })
-
-    it('should handle alternating processing types', () => {
-      applyProcessing('blackfill')
-      applyProcessing('mosaic')
-      applyProcessing('blackfill')
-
-      expect(undoStack.value.length).toBe(3)
-      expect(canUndo.value).toBe(true)
-
-      // Undo mosaic (last action)
-      undoLastAction()
-      expect(undoStack.value.length).toBe(2)
-
-      // Undo blackfill
-      undoLastAction()
-      expect(undoStack.value.length).toBe(1)
-
-      // Undo first blackfill
-      undoLastAction()
-      expect(undoStack.value.length).toBe(0)
-      expect(canUndo.value).toBe(false)
-    })
-  })
-
-  describe('Edge Cases', () => {
-    it('should handle undo without canvas context', () => {
-      mockCtx = null
-      const result = undoLastAction()
-
-      expect(result).toBe(false)
-      expect(canUndo.value).toBe(false)
-    })
-
-    it('should handle reset without canvas context', () => {
-      mockCtx = null
-
-      // Should not throw error
-      expect(() => resetToOriginal()).not.toThrow()
-    })
-
-    it('should handle processing with empty original image data', () => {
-      originalImageData = null
-      mockCtx.getImageData.mockReturnValue(null)
-
-      applyProcessing('blackfill')
-
-      // Should still add to stack even with null data
-      expect(undoStack.value.length).toBe(1)
-      expect(canUndo.value).toBe(true)
-    })
-
-    it('should handle rapid processing applications', () => {
-      // Simulate rapid user actions
-      for (let i = 0; i < 10; i++) {
-        applyProcessing(i % 2 === 0 ? 'blackfill' : 'mosaic')
-      }
-
-      expect(undoStack.value.length).toBe(10)
-      expect(canUndo.value).toBe(true)
-
-      // Undo all actions
-      for (let i = 0; i < 10; i++) {
-        undoLastAction()
-      }
-
-      expect(undoStack.value.length).toBe(0)
-      expect(canUndo.value).toBe(false)
-    })
+    expect(canUndo.value).toBe(false)
+    expect(mockContext.clearRect).toHaveBeenCalled()
+    expect(mockContext.drawImage).toHaveBeenCalled()
   })
 })

@@ -1,6 +1,20 @@
 // Test setup file
 import { vi } from 'vitest'
 
+// Mock ImageData constructor for JSDOM environment
+global.ImageData = class MockImageData {
+  data: Uint8ClampedArray
+  width: number
+  height: number
+  colorSpace: 'srgb' = 'srgb'
+
+  constructor(data: Uint8ClampedArray, width: number, height?: number) {
+    this.data = data
+    this.width = width
+    this.height = height || 0
+  }
+} as any
+
 // Mock Canvas API
 const mockCanvas = {
   getContext: vi.fn(() => ({
@@ -41,12 +55,25 @@ global.FileReader = vi.fn(() => ({
 })) as unknown as typeof FileReader
 
 // Mock Image
-global.Image = vi.fn(() => ({
-  src: '',
-  onload: null,
-  width: 100,
-  height: 100,
-})) as unknown as typeof Image
+global.Image = vi.fn(() => {
+  const img = {
+    src: '',
+    width: 100,
+    height: 100,
+    onload: null as (() => void) | null,
+  }
+  // Immediately trigger onload when it's set
+  Object.defineProperty(img, 'onload', {
+    set(value) {
+      if (typeof value === 'function') {
+        // Use a timeout to simulate async loading, preventing infinite loops
+        // if onload is set inside another onload.
+        setTimeout(value, 0)
+      }
+    },
+  })
+  return img
+}) as unknown as typeof Image
 
 // Mock URL.createObjectURL
 global.URL.createObjectURL = vi.fn(() => 'blob:fake-url')

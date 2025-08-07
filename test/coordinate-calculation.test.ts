@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { ref } from 'vue'
+import { useSelection } from '~/composables/useSelection'
+import type { SelectionArea } from '~/composables/useSelection'
 
-describe('Coordinate Calculation', () => {
+describe('useSelection Composable', () => {
   let mockCanvas: {
     value: {
       width: number
@@ -23,61 +26,38 @@ describe('Coordinate Calculation', () => {
       toJSON: () => ({}),
     }
 
-    mockCanvas = {
-      value: {
-        width: 800,
-        height: 600,
-        getBoundingClientRect: vi.fn(() => mockRect),
-      },
-    }
+    mockCanvas = ref({
+      width: 800,
+      height: 600,
+      getBoundingClientRect: vi.fn(() => mockRect),
+    })
   })
 
-  // getEventPosition function extracted from ImageMosaic.vue
-  const getEventPosition = (
-    event: MouseEvent | TouchEvent,
-    canvas: {
-      value: {
-        width: number
-        height: number
-        getBoundingClientRect: () => DOMRect
-      }
-    }
-  ) => {
-    const rect = canvas.value.getBoundingClientRect()
-    const scaleX = canvas.value.width / rect.width
-    const scaleY = canvas.value.height / rect.height
-
-    let clientX: number, clientY: number
-
-    if (event instanceof MouseEvent) {
-      clientX = event.clientX
-      clientY = event.clientY
-    } else {
-      clientX = event.touches[0].clientX
-      clientY = event.touches[0].clientY
-    }
-
-    return {
-      x: (clientX - rect.left) * scaleX,
-      y: (clientY - rect.top) * scaleY,
-    }
-  }
-
-  describe('getEventPosition', () => {
+  describe('getEventPosition (via startSelection)', () => {
     it('should calculate correct canvas coordinates for mouse events', () => {
-      const mouseEvent = new MouseEvent('click', {
+      const { startSelection, selection } = useSelection(mockCanvas, {
+        onSelectionUpdate: vi.fn(),
+        onSelectionEnd: vi.fn(),
+      })
+
+      const mouseEvent = new MouseEvent('mousedown', {
         clientX: 210, // 10 (rect.left) + 200 (offset)
         clientY: 170, // 20 (rect.top) + 150 (offset)
       })
 
-      const result = getEventPosition(mouseEvent, mockCanvas)
+      startSelection(mouseEvent)
 
-      // Expected: (200 / 400) * 800 = 400, (150 / 300) * 600 = 300
-      expect(result.x).toBe(400)
-      expect(result.y).toBe(300)
+      // Expected: x = (200 / 400) * 800 = 400, y = (150 / 300) * 600 = 300
+      expect(selection.value.startX).toBe(400)
+      expect(selection.value.startY).toBe(300)
     })
 
     it('should calculate correct canvas coordinates for touch events', () => {
+      const { startSelection, selection } = useSelection(mockCanvas, {
+        onSelectionUpdate: vi.fn(),
+        onSelectionEnd: vi.fn(),
+      })
+
       const touchEvent = new TouchEvent('touchstart', {
         touches: [
           new Touch({
@@ -89,232 +69,93 @@ describe('Coordinate Calculation', () => {
         ],
       })
 
-      const result = getEventPosition(touchEvent, mockCanvas)
+      startSelection(touchEvent)
 
-      // Expected: (100 / 400) * 800 = 200, (100 / 300) * 600 = 200
-      expect(result.x).toBe(200)
-      expect(result.y).toBe(200)
+      // Expected: x = (100 / 400) * 800 = 200, y = (100 / 300) * 600 = 200
+      expect(selection.value.startX).toBe(200)
+      expect(selection.value.startY).toBe(200)
     })
 
     it('should handle edge cases - top-left corner', () => {
-      const mouseEvent = new MouseEvent('click', {
+      const { startSelection, selection } = useSelection(mockCanvas, {
+        onSelectionUpdate: vi.fn(),
+        onSelectionEnd: vi.fn(),
+      })
+
+      const mouseEvent = new MouseEvent('mousedown', {
         clientX: 10, // rect.left
         clientY: 20, // rect.top
       })
 
-      const result = getEventPosition(mouseEvent, mockCanvas)
+      startSelection(mouseEvent)
 
-      expect(result.x).toBe(0)
-      expect(result.y).toBe(0)
+      expect(selection.value.startX).toBe(0)
+      expect(selection.value.startY).toBe(0)
     })
 
-    it('should handle edge cases - bottom-right corner', () => {
-      const mouseEvent = new MouseEvent('click', {
+    it('should handle edge cases - bottom-right corner', async () => {
+      const { startSelection, updateSelection, selection } = useSelection(
+        mockCanvas,
+        {
+          onSelectionUpdate: vi.fn(),
+          onSelectionEnd: vi.fn(),
+        }
+      )
+
+      // Start selection to initialize metrics
+      startSelection(new MouseEvent('mousedown', { clientX: 10, clientY: 20 }))
+
+      const mouseEvent = new MouseEvent('mousemove', {
         clientX: 410, // rect.left + rect.width
         clientY: 320, // rect.top + rect.height
       })
 
-      const result = getEventPosition(mouseEvent, mockCanvas)
+      updateSelection(mouseEvent)
 
-      expect(result.x).toBe(800)
-      expect(result.y).toBe(600)
+      // This is a workaround to wait for requestAnimationFrame
+      await new Promise(resolve => setTimeout(resolve, 20))
+
+      expect(selection.value.endX).toBe(800)
+      expect(selection.value.endY).toBe(600)
     })
+  })
 
-    it('should handle different scaling ratios', () => {
-      // Different canvas size
-      mockCanvas.value.width = 1600
-      mockCanvas.value.height = 1200
-
-      const mouseEvent = new MouseEvent('click', {
-        clientX: 210, // 10 (rect.left) + 200 (offset)
-        clientY: 170, // 20 (rect.top) + 150 (offset)
+  describe('hasSelection computed property', () => {
+    it('should be true for a valid selection', () => {
+      const { selection, hasSelection, isSelecting } = useSelection(mockCanvas, {
+        onSelectionUpdate: vi.fn(),
+        onSelectionEnd: vi.fn(),
       })
-
-      const result = getEventPosition(mouseEvent, mockCanvas)
-
-      // Expected: (200 / 400) * 1600 = 800, (150 / 300) * 1200 = 600
-      expect(result.x).toBe(800)
-      expect(result.y).toBe(600)
-    })
-  })
-
-  describe('Selection Area Normalization', () => {
-    const normalizeSelection = (selection: {
-      startX: number
-      startY: number
-      endX: number
-      endY: number
-    }) => {
-      const startX = Math.min(selection.startX, selection.endX)
-      const startY = Math.min(selection.startY, selection.endY)
-      const width = Math.abs(selection.endX - selection.startX)
-      const height = Math.abs(selection.endY - selection.startY)
-
-      return { startX, startY, width, height }
-    }
-
-    it('should normalize selection when dragging right-down', () => {
-      const selection = {
-        startX: 100,
-        startY: 100,
-        endX: 200,
-        endY: 200,
-      }
-
-      const result = normalizeSelection(selection)
-
-      expect(result.startX).toBe(100)
-      expect(result.startY).toBe(100)
-      expect(result.width).toBe(100)
-      expect(result.height).toBe(100)
+      isSelecting.value = true // Prerequisite for ending selection
+      selection.value = { startX: 10, startY: 10, endX: 20, endY: 20, active: true }
+      expect(hasSelection.value).toBe(true)
     })
 
-    it('should normalize selection when dragging left-up', () => {
-      const selection = {
-        startX: 200,
-        startY: 200,
-        endX: 100,
-        endY: 100,
-      }
-
-      const result = normalizeSelection(selection)
-
-      expect(result.startX).toBe(100)
-      expect(result.startY).toBe(100)
-      expect(result.width).toBe(100)
-      expect(result.height).toBe(100)
+    it('should be false if width is too small', () => {
+      const { selection, hasSelection } = useSelection(mockCanvas, {
+        onSelectionUpdate: vi.fn(),
+        onSelectionEnd: vi.fn(),
+      })
+      selection.value = { startX: 10, startY: 10, endX: 14, endY: 20, active: true }
+      expect(hasSelection.value).toBe(false)
     })
 
-    it('should normalize selection when dragging right-up', () => {
-      const selection = {
-        startX: 100,
-        startY: 200,
-        endX: 200,
-        endY: 100,
-      }
-
-      const result = normalizeSelection(selection)
-
-      expect(result.startX).toBe(100)
-      expect(result.startY).toBe(100)
-      expect(result.width).toBe(100)
-      expect(result.height).toBe(100)
+    it('should be false if height is too small', () => {
+      const { selection, hasSelection } = useSelection(mockCanvas, {
+        onSelectionUpdate: vi.fn(),
+        onSelectionEnd: vi.fn(),
+      })
+      selection.value = { startX: 10, startY: 10, endX: 20, endY: 14, active: true }
+      expect(hasSelection.value).toBe(false)
     })
 
-    it('should normalize selection when dragging left-down', () => {
-      const selection = {
-        startX: 200,
-        startY: 100,
-        endX: 100,
-        endY: 200,
-      }
-
-      const result = normalizeSelection(selection)
-
-      expect(result.startX).toBe(100)
-      expect(result.startY).toBe(100)
-      expect(result.width).toBe(100)
-      expect(result.height).toBe(100)
-    })
-
-    it('should handle zero-width selection', () => {
-      const selection = {
-        startX: 100,
-        startY: 100,
-        endX: 100,
-        endY: 200,
-      }
-
-      const result = normalizeSelection(selection)
-
-      expect(result.startX).toBe(100)
-      expect(result.startY).toBe(100)
-      expect(result.width).toBe(0)
-      expect(result.height).toBe(100)
-    })
-
-    it('should handle zero-height selection', () => {
-      const selection = {
-        startX: 100,
-        startY: 100,
-        endX: 200,
-        endY: 100,
-      }
-
-      const result = normalizeSelection(selection)
-
-      expect(result.startX).toBe(100)
-      expect(result.startY).toBe(100)
-      expect(result.width).toBe(100)
-      expect(result.height).toBe(0)
-    })
-  })
-
-  describe('Selection Validation', () => {
-    const isValidSelection = (selection: {
-      startX: number
-      startY: number
-      endX: number
-      endY: number
-    }) => {
-      const width = Math.abs(selection.endX - selection.startX)
-      const height = Math.abs(selection.endY - selection.startY)
-      return width > 5 && height > 5
-    }
-
-    it('should validate selection with sufficient size', () => {
-      const selection = {
-        startX: 100,
-        startY: 100,
-        endX: 110,
-        endY: 110,
-      }
-
-      expect(isValidSelection(selection)).toBe(true)
-    })
-
-    it('should invalidate selection with insufficient width', () => {
-      const selection = {
-        startX: 100,
-        startY: 100,
-        endX: 104,
-        endY: 110,
-      }
-
-      expect(isValidSelection(selection)).toBe(false)
-    })
-
-    it('should invalidate selection with insufficient height', () => {
-      const selection = {
-        startX: 100,
-        startY: 100,
-        endX: 110,
-        endY: 104,
-      }
-
-      expect(isValidSelection(selection)).toBe(false)
-    })
-
-    it('should invalidate selection with both dimensions too small', () => {
-      const selection = {
-        startX: 100,
-        startY: 100,
-        endX: 103,
-        endY: 104,
-      }
-
-      expect(isValidSelection(selection)).toBe(false)
-    })
-
-    it('should validate selection regardless of drag direction', () => {
-      const selection = {
-        startX: 110,
-        startY: 110,
-        endX: 100,
-        endY: 100,
-      }
-
-      expect(isValidSelection(selection)).toBe(true)
+    it('should be false if selection is not active', () => {
+      const { selection, hasSelection } = useSelection(mockCanvas, {
+        onSelectionUpdate: vi.fn(),
+        onSelectionEnd: vi.fn(),
+      })
+      selection.value = { startX: 10, startY: 10, endX: 20, endY: 20, active: false }
+      expect(hasSelection.value).toBe(false)
     })
   })
 })
