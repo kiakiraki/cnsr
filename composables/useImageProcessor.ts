@@ -37,7 +37,13 @@ export function useImageProcessor(
     canvasEl.width = processedImg.width
     canvasEl.height = processedImg.height
 
-    context.drawImage(processedImg, 0, 0, processedImg.width, processedImg.height)
+    context.drawImage(
+      processedImg,
+      0,
+      0,
+      processedImg.width,
+      processedImg.height
+    )
     originalImageData = context.getImageData(
       0,
       0,
@@ -93,10 +99,7 @@ export function useImageProcessor(
     }
   }
 
-  const applyProcessing = (
-    mode: ProcessingMode,
-    selection: SelectionArea
-  ) => {
+  const applyProcessing = (mode: ProcessingMode, selection: SelectionArea) => {
     const context = getContext()
     if (!context || !originalImageData) return
 
@@ -149,8 +152,16 @@ export function useImageProcessor(
             const g = data[sampleIndex + 1]
             const b = data[sampleIndex + 2]
 
-            for (let blockY = y; blockY < y + mosaicSize && blockY < height; blockY++) {
-              for (let blockX = x; blockX < x + mosaicSize && blockX < width; blockX++) {
+            for (
+              let blockY = y;
+              blockY < y + mosaicSize && blockY < height;
+              blockY++
+            ) {
+              for (
+                let blockX = x;
+                blockX < x + mosaicSize && blockX < width;
+                blockX++
+              ) {
                 const index = (blockY * width + blockX) * 4
                 data[index] = r
                 data[index + 1] = g
@@ -176,18 +187,24 @@ export function useImageProcessor(
     if (!context) return
     context.putImageData(state, 0, 0)
     originalImageData = context.getImageData(
-        0,
-        0,
-        canvas.value!.width,
-        canvas.value!.height
-      )
+      0,
+      0,
+      canvas.value!.width,
+      canvas.value!.height
+    )
   }
 
   const resetToOriginal = () => {
     const context = getContext()
     if (!context || !currentImage) return
     context.clearRect(0, 0, canvas.value!.width, canvas.value!.height)
-    context.drawImage(currentImage, 0, 0, canvas.value!.width, canvas.value!.height)
+    context.drawImage(
+      currentImage,
+      0,
+      0,
+      canvas.value!.width,
+      canvas.value!.height
+    )
     originalImageData = context.getImageData(
       0,
       0,

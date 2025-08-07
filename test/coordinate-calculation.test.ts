@@ -121,12 +121,21 @@ describe('useSelection Composable', () => {
 
   describe('hasSelection computed property', () => {
     it('should be true for a valid selection', () => {
-      const { selection, hasSelection, isSelecting } = useSelection(mockCanvas, {
-        onSelectionUpdate: vi.fn(),
-        onSelectionEnd: vi.fn(),
-      })
+      const { selection, hasSelection, isSelecting } = useSelection(
+        mockCanvas,
+        {
+          onSelectionUpdate: vi.fn(),
+          onSelectionEnd: vi.fn(),
+        }
+      )
       isSelecting.value = true // Prerequisite for ending selection
-      selection.value = { startX: 10, startY: 10, endX: 20, endY: 20, active: true }
+      selection.value = {
+        startX: 10,
+        startY: 10,
+        endX: 20,
+        endY: 20,
+        active: true,
+      }
       expect(hasSelection.value).toBe(true)
     })
 
@@ -135,7 +144,13 @@ describe('useSelection Composable', () => {
         onSelectionUpdate: vi.fn(),
         onSelectionEnd: vi.fn(),
       })
-      selection.value = { startX: 10, startY: 10, endX: 14, endY: 20, active: true }
+      selection.value = {
+        startX: 10,
+        startY: 10,
+        endX: 14,
+        endY: 20,
+        active: true,
+      }
       expect(hasSelection.value).toBe(false)
     })
 
@@ -144,7 +159,13 @@ describe('useSelection Composable', () => {
         onSelectionUpdate: vi.fn(),
         onSelectionEnd: vi.fn(),
       })
-      selection.value = { startX: 10, startY: 10, endX: 20, endY: 14, active: true }
+      selection.value = {
+        startX: 10,
+        startY: 10,
+        endX: 20,
+        endY: 14,
+        active: true,
+      }
       expect(hasSelection.value).toBe(false)
     })
 
@@ -153,7 +174,13 @@ describe('useSelection Composable', () => {
         onSelectionUpdate: vi.fn(),
         onSelectionEnd: vi.fn(),
       })
-      selection.value = { startX: 10, startY: 10, endX: 20, endY: 20, active: false }
+      selection.value = {
+        startX: 10,
+        startY: 10,
+        endX: 20,
+        endY: 20,
+        active: false,
+      }
       expect(hasSelection.value).toBe(false)
     })
   })
