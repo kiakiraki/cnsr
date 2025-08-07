@@ -6,14 +6,14 @@ global.ImageData = class MockImageData {
   data: Uint8ClampedArray
   width: number
   height: number
-  colorSpace: 'srgb' = 'srgb'
+  colorSpace = 'srgb' as const
 
   constructor(data: Uint8ClampedArray, width: number, height?: number) {
     this.data = data
     this.width = width
     this.height = height || 0
   }
-} as any
+} as unknown as typeof ImageData
 
 // Mock Canvas API
 const mockCanvas = {

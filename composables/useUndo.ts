@@ -1,5 +1,4 @@
 import { ref, shallowRef } from 'vue'
-import type { ShallowRef } from 'vue'
 
 const MAX_UNDO_LEVELS = 16
 

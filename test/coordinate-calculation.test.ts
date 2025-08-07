@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
 import { useSelection } from '~/composables/useSelection'
-import type { SelectionArea } from '~/composables/useSelection'
 
 describe('useSelection Composable', () => {
   let mockCanvas: {

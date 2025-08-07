@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { Mock } from 'vitest'
 import { ref } from 'vue'
 import { useUndo } from '~/composables/useUndo'
 import { useImageProcessor } from '~/composables/useImageProcessor'
@@ -12,14 +13,33 @@ const createMockImageData = (id: number): ImageData => ({
   colorSpace: 'srgb',
 })
 
+type MockContext = {
+  putImageData: Mock<unknown[], unknown>
+  getImageData: Mock<unknown[], ImageData>
+  drawImage: Mock<unknown[], unknown>
+  clearRect: Mock<unknown[], unknown>
+  save: Mock<unknown[], unknown>
+  restore: Mock<unknown[], unknown>
+  beginPath: Mock<unknown[], unknown>
+  rect: Mock<unknown[], unknown>
+  clip: Mock<unknown[], unknown>
+  fillRect: Mock<unknown[], unknown>
+  filter: string
+}
+
 describe('Undo/Redo Integration', () => {
-  let mockCanvas: any
-  let mockContext: any
+  let mockCanvas: globalThis.Ref<{
+    width: number
+    height: number
+    getContext: () => MockContext
+    toDataURL: () => string
+  }>
+  let mockContext: MockContext
 
   beforeEach(() => {
     mockContext = {
       putImageData: vi.fn(),
-      getImageData: vi.fn((x, y, w, h) => createMockImageData(1)),
+      getImageData: vi.fn((_x, _y, _w, _h) => createMockImageData(1)),
       drawImage: vi.fn(),
       clearRect: vi.fn(),
       save: vi.fn(),
@@ -126,7 +146,7 @@ describe('Undo/Redo Integration', () => {
     expect(lastState?.data[0]).toBe(1)
     if (lastState) processor.restoreState(lastState)
 
-    // Stack should be empty now
+    // 6. Stack should be empty now
     lastState = popStateFromUndoStack()
     expect(lastState).toBeUndefined()
   })
@@ -153,7 +173,7 @@ describe('Undo/Redo Integration', () => {
     }
 
     let count = 0
-    while(popStateFromUndoStack()) {
+    while (popStateFromUndoStack()) {
       count++
     }
     expect(count).toBe(MAX_UNDO_LEVELS)

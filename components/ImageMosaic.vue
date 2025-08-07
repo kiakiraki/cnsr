@@ -141,7 +141,6 @@ const {
 
 const {
   selection,
-  isSelecting,
   startSelection,
   updateSelection,
   endSelection,
