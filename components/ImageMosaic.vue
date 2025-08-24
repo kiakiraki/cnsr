@@ -333,6 +333,11 @@ const startSelection = (event: MouseEvent | TouchEvent) => {
   event.preventDefault()
   if (!canvas.value) return
 
+  // Prevent selection on right-click
+  if (event instanceof MouseEvent && event.button === 2) {
+    return
+  }
+
   // Ensure canvas metrics are fresh for mouse events at selection start
   if (event instanceof MouseEvent) {
     updateCanvasMetrics()
