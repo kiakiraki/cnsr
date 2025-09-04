@@ -17,7 +17,7 @@ Vue.js/Nuxt.jsで構築された画像処理Webアプリケーションです。
 
 ## 技術スタック
 
-- **フレームワーク**: Nuxt.js 3.17.6
+- **フレームワーク**: Nuxt.js 4.0.3
 - **言語**: TypeScript, Vue 3 Composition API
 - **テスト**: Vitest + Vue Test Utils
 - **リンター**: ESLint + Prettier
