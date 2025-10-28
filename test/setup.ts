@@ -52,30 +52,49 @@ global.Image = vi.fn(() => ({
 global.URL.createObjectURL = vi.fn(() => 'blob:fake-url')
 
 // Mock Touch API
-global.Touch = vi.fn((init: TouchInit) => ({
-  identifier: init.identifier || 1,
-  target: init.target || document.body,
-  clientX: init.clientX || 0,
-  clientY: init.clientY || 0,
-  pageX: init.pageX || 0,
-  pageY: init.pageY || 0,
-  screenX: init.screenX || 0,
-  screenY: init.screenY || 0,
-  radiusX: init.radiusX || 0,
-  radiusY: init.radiusY || 0,
-  rotationAngle: init.rotationAngle || 0,
-  force: init.force || 0,
-})) as unknown as typeof Touch
+global.Touch = class Touch {
+  identifier: number
+  target: EventTarget
+  clientX: number
+  clientY: number
+  pageX: number
+  pageY: number
+  screenX: number
+  screenY: number
+  radiusX: number
+  radiusY: number
+  rotationAngle: number
+  force: number
+
+  constructor(init: TouchInit) {
+    this.identifier = init.identifier || 1
+    this.target = init.target || document.body
+    this.clientX = init.clientX || 0
+    this.clientY = init.clientY || 0
+    this.pageX = init.pageX || 0
+    this.pageY = init.pageY || 0
+    this.screenX = init.screenX || 0
+    this.screenY = init.screenY || 0
+    this.radiusX = init.radiusX || 0
+    this.radiusY = init.radiusY || 0
+    this.rotationAngle = init.rotationAngle || 0
+    this.force = init.force || 0
+  }
+} as unknown as typeof Touch
 
 // Mock TouchEvent
-global.TouchEvent = vi.fn((type: string, init: TouchEventInit) => ({
-  type,
-  touches: init.touches || [],
-  targetTouches: init.targetTouches || [],
-  changedTouches: init.changedTouches || [],
-  preventDefault: vi.fn(),
-  stopPropagation: vi.fn(),
-})) as unknown as typeof TouchEvent
+global.TouchEvent = class TouchEvent extends Event {
+  touches: TouchList
+  targetTouches: TouchList
+  changedTouches: TouchList
+
+  constructor(type: string, init: TouchEventInit = {}) {
+    super(type)
+    this.touches = (init.touches || []) as unknown as TouchList
+    this.targetTouches = (init.targetTouches || []) as unknown as TouchList
+    this.changedTouches = (init.changedTouches || []) as unknown as TouchList
+  }
+} as unknown as typeof TouchEvent
 
 // Mock document.createElement for download links
 const mockElement = {
