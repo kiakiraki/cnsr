@@ -2,6 +2,11 @@
   "name": "nuxt-app",
   "private": true,
   "type": "module",
+  "packageManager": "npm@10.9.2",
+  "engines": {
+    "node": "24.1.0",
+    "npm": "10.9.2"
+  },
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",
@@ -26,6 +31,7 @@
     "@typescript-eslint/parser": "^8.48.0",
     "@vitejs/plugin-vue": "^6.0.2",
     "@vue/test-utils": "^2.4.6",
+    "commander": "^13.1.0",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
