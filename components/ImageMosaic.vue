@@ -210,7 +210,8 @@ const resizeImageIfNeeded = (
     // Create new image from resized canvas
     const resizedImg = new Image()
     resizedImg.onload = () => resolve(resizedImg)
-    resizedImg.onerror = () => reject(new Error('リサイズ後の画像の読み込みに失敗しました'))
+    resizedImg.onerror = () =>
+      reject(new Error('リサイズ後の画像の読み込みに失敗しました'))
     resizedImg.src = resizeCanvas.toDataURL('image/jpeg', 0.9)
   })
 }
@@ -324,7 +325,9 @@ const loadImageToCanvas = () => {
     }
   }
   img.onerror = () => {
-    showError('画像の読み込みに失敗しました。対応していない形式の可能性があります')
+    showError(
+      '画像の読み込みに失敗しました。対応していない形式の可能性があります'
+    )
     uploadedImage.value = null
   }
   img.src = uploadedImage.value
