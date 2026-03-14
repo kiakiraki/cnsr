@@ -1,5 +1,9 @@
 <template>
   <div class="image-mosaic-container">
+    <div v-if="errorMessage" class="error-message" @click="errorMessage = null">
+      {{ errorMessage }}
+    </div>
+
     <div
       v-if="!uploadedImage"
       class="upload-area"
@@ -131,6 +135,7 @@ const processingMode = ref<'blackfill' | 'whitefill' | 'mosaic' | 'blur'>(
   'blackfill'
 )
 const isDragOver = ref(false)
+const errorMessage = ref<string | null>(null)
 
 const selection = shallowRef<SelectionArea>({
   startX: 0,
@@ -205,17 +210,28 @@ const resizeImageIfNeeded = (
     // Create new image from resized canvas
     const resizedImg = new Image()
     resizedImg.onload = () => resolve(resizedImg)
+    resizedImg.onerror = () => reject(new Error('リサイズ後の画像の読み込みに失敗しました'))
     resizedImg.src = resizeCanvas.toDataURL('image/jpeg', 0.9)
   })
+}
+
+const showError = (message: string) => {
+  errorMessage.value = message
+  setTimeout(() => {
+    errorMessage.value = null
+  }, 5000)
 }
 
 const handleFileUpload = (event: Event) => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
+  if (!file) return
 
-  if (file && file.type.startsWith('image/')) {
-    processImageFile(file)
+  if (!file.type.startsWith('image/')) {
+    showError('画像ファイルを選択してください')
+    return
   }
+  processImageFile(file)
 }
 
 const processImageFile = (file: File) => {
@@ -226,6 +242,9 @@ const processImageFile = (file: File) => {
     nextTick(() => {
       loadImageToCanvas()
     })
+  }
+  reader.onerror = () => {
+    showError('ファイルの読み込みに失敗しました')
   }
   reader.readAsDataURL(file)
 }
@@ -261,9 +280,11 @@ const handleDrop = (event: DragEvent) => {
   const files = event.dataTransfer?.files
   if (files && files.length > 0) {
     const file = files[0]
-    if (file.type.startsWith('image/')) {
-      processImageFile(file)
+    if (!file.type.startsWith('image/')) {
+      showError('画像ファイルを選択してください')
+      return
     }
+    processImageFile(file)
   }
 }
 
@@ -298,9 +319,13 @@ const loadImageToCanvas = () => {
       // Initialize undo stack - start empty, first edit will add the original state
       undoStack.value = []
       canUndo.value = false
-    } catch (error) {
-      console.error('Error processing image:', error)
+    } catch {
+      showError('画像の処理中にエラーが発生しました')
     }
+  }
+  img.onerror = () => {
+    showError('画像の読み込みに失敗しました。対応していない形式の可能性があります')
+    uploadedImage.value = null
   }
   img.src = uploadedImage.value
 }
@@ -674,6 +699,17 @@ onUnmounted(() => {
   padding: 20px;
 }
 
+.error-message {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+}
+
 .upload-area {
   border: 2px dashed #ccc;
   border-radius: 10px;
@@ -892,6 +928,12 @@ onUnmounted(() => {
 }
 
 @media (prefers-color-scheme: dark) {
+  .error-message {
+    background-color: #4a1c1c;
+    color: #f5c6cb;
+    border-color: #6b2c2c;
+  }
+
   .upload-area {
     border-color: #555;
     background-color: #2d2d2d;
