@@ -120,6 +120,12 @@ interface SelectionArea {
   active: boolean
 }
 
+interface UndoEntry {
+  imageData: ImageData
+  x: number
+  y: number
+}
+
 const fileInput = ref<HTMLInputElement>()
 const canvas = ref<HTMLCanvasElement>()
 const canvasContainer = ref<HTMLDivElement>()
@@ -129,7 +135,7 @@ const originalFileName = ref<string>('')
 const hasSelection = ref(false)
 const isSelecting = ref(false)
 const canUndo = ref(false)
-const undoStack = shallowRef<ImageData[]>([])
+const undoStack = shallowRef<UndoEntry[]>([])
 const MAX_UNDO_LEVELS = 64
 const processingMode = ref<'blackfill' | 'whitefill' | 'mosaic' | 'blur'>(
   'blackfill'
@@ -455,25 +461,20 @@ const redrawCanvas = () => {
 const applyMosaic = () => {
   if (!ctx || !originalImageData || !hasSelection.value) return
 
-  // Save current state to undo stack before making changes (clean state without selection overlay)
-  ctx.putImageData(originalImageData, 0, 0)
-  const currentState = ctx.getImageData(
-    0,
-    0,
-    canvas.value!.width,
-    canvas.value!.height
-  )
-
-  // Add to undo stack and manage size limit
-  undoStack.value.push(currentState)
-  if (undoStack.value.length > MAX_UNDO_LEVELS) {
-    undoStack.value.shift() // Remove oldest entry
-  }
-
   const startX = Math.min(selection.value.startX, selection.value.endX)
   const startY = Math.min(selection.value.startY, selection.value.endY)
   const width = Math.abs(selection.value.endX - selection.value.startX)
   const height = Math.abs(selection.value.endY - selection.value.startY)
+
+  // Save only the affected region to undo stack before making changes
+  ctx.putImageData(originalImageData, 0, 0)
+  const regionData = ctx.getImageData(startX, startY, width, height)
+
+  // Add to undo stack and manage size limit
+  undoStack.value.push({ imageData: regionData, x: startX, y: startY })
+  if (undoStack.value.length > MAX_UNDO_LEVELS) {
+    undoStack.value.shift() // Remove oldest entry
+  }
 
   if (processingMode.value === 'blackfill') {
     // Fill the selected area with black
@@ -557,11 +558,9 @@ const applyMosaic = () => {
 const undoLastAction = () => {
   if (!ctx || undoStack.value.length <= 0) return
 
-  // Get the last saved state
-  const previousState = undoStack.value.pop()!
-
-  // Restore the previous state
-  ctx.putImageData(previousState, 0, 0)
+  // Get the last saved region and restore it
+  const entry = undoStack.value.pop()!
+  ctx.putImageData(entry.imageData, entry.x, entry.y)
   originalImageData = ctx.getImageData(
     0,
     0,
