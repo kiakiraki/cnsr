@@ -126,7 +126,7 @@ const hasSelection = ref(false)
 const isSelecting = ref(false)
 const canUndo = ref(false)
 const undoStack = shallowRef<ImageData[]>([])
-const MAX_UNDO_LEVELS = 16
+const MAX_UNDO_LEVELS = 64
 const processingMode = ref<'blackfill' | 'whitefill' | 'mosaic' | 'blur'>(
   'blackfill'
 )
@@ -641,10 +641,12 @@ const handlePaste = (event: ClipboardEvent) => {
   }
 }
 
+let resizeObserver: ResizeObserver | null = null
+
 onMounted(() => {
   // Set up ResizeObserver for automatic canvas metrics updates
   if (canvas.value) {
-    const resizeObserver = new ResizeObserver(() => {
+    resizeObserver = new ResizeObserver(() => {
       updateCanvasMetrics()
     })
     resizeObserver.observe(canvas.value)
@@ -657,8 +659,10 @@ onMounted(() => {
   document.addEventListener('paste', handlePaste)
 })
 
-// Clean up event listener on unmount
+// Clean up event listener and ResizeObserver on unmount
 onUnmounted(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
   document.removeEventListener('paste', handlePaste)
 })
 </script>
