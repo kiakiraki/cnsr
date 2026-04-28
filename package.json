@@ -22,14 +22,14 @@
   },
   "dependencies": {
     "nuxt": "^4.4.2",
-    "vue": "^3.5.32",
+    "vue": "^3.5.33",
     "vue-router": "^5.0.6"
   },
   "devDependencies": {
     "@nuxt/eslint-config": "^1.15.2",
     "@typescript-eslint/eslint-plugin": "^8.58.0",
     "@typescript-eslint/parser": "^8.58.0",
-    "@vitejs/plugin-vue": "^6.0.5",
+    "@vitejs/plugin-vue": "^6.0.6",
     "@vue/test-utils": "^2.4.6",
     "commander": "^14.0.3",
     "eslint": "^10.2.0",
