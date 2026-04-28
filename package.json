@@ -27,10 +27,10 @@
   },
   "devDependencies": {
     "@nuxt/eslint-config": "^1.15.2",
-    "@typescript-eslint/eslint-plugin": "^8.58.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.1",
     "@typescript-eslint/parser": "^8.58.0",
     "@vitejs/plugin-vue": "^6.0.5",
-    "@vue/test-utils": "^2.4.6",
+    "@vue/test-utils": "^2.4.9",
     "commander": "^14.0.3",
     "eslint": "^10.2.0",
     "eslint-config-prettier": "^10.1.8",
