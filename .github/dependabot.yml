@@ -5,11 +5,50 @@
 
 version: 2
 updates:
-  - package-ecosystem: 'npm' # See documentation for possible values
-    directory: '/' # Location of package manifests
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
       interval: 'weekly'
+    groups:
+      nuxt-vue:
+        patterns:
+          - 'nuxt'
+          - 'nuxt-*'
+          - '@nuxt/*'
+          - 'vue'
+          - 'vue-*'
+          - '@vue/*'
+          - '@vitejs/plugin-vue'
+        update-types:
+          - 'minor'
+          - 'patch'
+      lint-format:
+        patterns:
+          - 'eslint'
+          - 'eslint-*'
+          - '@typescript-eslint/*'
+          - 'prettier'
+        update-types:
+          - 'minor'
+          - 'patch'
+      test:
+        patterns:
+          - 'vitest'
+          - 'jsdom'
+        update-types:
+          - 'minor'
+          - 'patch'
+      dev-minor:
+        dependency-type: 'development'
+        update-types:
+          - 'minor'
+          - 'patch'
+
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
       interval: 'weekly'
+    groups:
+      actions:
+        patterns:
+          - '*'
