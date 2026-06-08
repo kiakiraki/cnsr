@@ -21,7 +21,7 @@
     "test:run": "vitest run"
   },
   "dependencies": {
-    "nuxt": "^4.4.7",
+    "nuxt": "^4.4.8",
     "vue": "^3.5.35",
     "vue-router": "^5.0.6"
   },
