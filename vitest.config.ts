@@ -11,6 +11,13 @@ export default defineConfig({
       provider: 'v8',
       include: ['components/**/*.vue', 'composables/**/*.ts'],
       reporter: ['text', 'html'],
+      // 現状値(約53/46/46/55%)から回帰しないための下限。向上に合わせて引き上げる
+      thresholds: {
+        statements: 50,
+        branches: 40,
+        functions: 40,
+        lines: 50,
+      },
     },
   },
 })
