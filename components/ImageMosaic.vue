@@ -198,7 +198,7 @@ const resizeImageIfNeeded = (
     return Promise.resolve(img) // No resizing needed
   }
 
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     // Calculate new dimensions maintaining aspect ratio
     const ratio = maxSize / maxDimension
     const newWidth = Math.floor(img.width * ratio)
@@ -218,7 +218,8 @@ const resizeImageIfNeeded = (
     resizedImg.onload = () => resolve(resizedImg)
     resizedImg.onerror = () =>
       reject(new Error('リサイズ後の画像の読み込みに失敗しました'))
-    resizedImg.src = resizeCanvas.toDataURL('image/jpeg', 0.9)
+    // PNG形式で透過情報（アルファチャンネル）を保持する
+    resizedImg.src = resizeCanvas.toDataURL('image/png')
   })
 }
 

@@ -1,13 +1,3 @@
-[build]
-command = "npm run build"
-publish = "dist"
-
-[build.environment]
-NODE_VERSION = "24.1.0"
-
-[[headers]]
-for = "/*"
-  [headers.values]
-  X-Frame-Options = "DENY"
-  X-Content-Type-Options = "nosniff"
-  Referrer-Policy = "strict-origin-when-cross-origin"
+name = "cnsr"
+pages_build_output_dir = "dist"
+compatibility_date = "2025-05-15"
