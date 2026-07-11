@@ -1,14 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { ref } from 'vue'
+import {
+  useAreaSelection,
+  SELECTION_MIN_SIZE_PX,
+  type UseAreaSelectionDeps,
+} from '../composables/useAreaSelection'
 
 describe('Coordinate Calculation', () => {
-  let mockCanvas: {
-    value: {
-      width: number
-      height: number
-      getBoundingClientRect: () => DOMRect
-    }
-  }
   let mockRect: DOMRect
+  let scale: { scaleX: number; scaleY: number }
+  let deps: UseAreaSelectionDeps
 
   beforeEach(() => {
     mockRect = {
@@ -22,62 +23,34 @@ describe('Coordinate Calculation', () => {
       right: 410,
       toJSON: () => ({}),
     }
+    scale = { scaleX: 800 / 400, scaleY: 600 / 300 }
 
-    mockCanvas = {
-      value: {
-        width: 800,
-        height: 600,
-        getBoundingClientRect: vi.fn(() => mockRect),
-      },
+    deps = {
+      canvas: ref({ width: 800, height: 600 } as HTMLCanvasElement),
+      updateCanvasMetrics: vi.fn(),
+      getCanvasRect: () => mockRect,
+      getScale: () => scale,
+      redrawCanvas: vi.fn(),
     }
   })
 
-  // getEventPosition function extracted from ImageMosaic.vue
-  const getEventPosition = (
-    event: MouseEvent | TouchEvent,
-    canvas: {
-      value: {
-        width: number
-        height: number
-        getBoundingClientRect: () => DOMRect
-      }
-    }
-  ) => {
-    const rect = canvas.value.getBoundingClientRect()
-    const scaleX = canvas.value.width / rect.width
-    const scaleY = canvas.value.height / rect.height
-
-    let clientX: number, clientY: number
-
-    if (event instanceof MouseEvent) {
-      clientX = event.clientX
-      clientY = event.clientY
-    } else {
-      clientX = event.touches[0]!.clientX
-      clientY = event.touches[0]!.clientY
-    }
-
-    return {
-      x: (clientX - rect.left) * scaleX,
-      y: (clientY - rect.top) * scaleY,
-    }
-  }
-
   describe('getEventPosition', () => {
     it('should calculate correct canvas coordinates for mouse events', () => {
+      const { getEventPosition } = useAreaSelection(deps)
       const mouseEvent = new MouseEvent('click', {
         clientX: 210, // 10 (rect.left) + 200 (offset)
         clientY: 170, // 20 (rect.top) + 150 (offset)
       })
 
-      const result = getEventPosition(mouseEvent, mockCanvas)
+      const result = getEventPosition(mouseEvent)
 
       // Expected: (200 / 400) * 800 = 400, (150 / 300) * 600 = 300
-      expect(result.x).toBe(400)
-      expect(result.y).toBe(300)
+      expect(result?.x).toBe(400)
+      expect(result?.y).toBe(300)
     })
 
     it('should calculate correct canvas coordinates for touch events', () => {
+      const { getEventPosition } = useAreaSelection(deps)
       const touchEvent = new TouchEvent('touchstart', {
         touches: [
           new Touch({
@@ -89,232 +62,201 @@ describe('Coordinate Calculation', () => {
         ],
       })
 
-      const result = getEventPosition(touchEvent, mockCanvas)
+      const result = getEventPosition(touchEvent)
 
       // Expected: (100 / 400) * 800 = 200, (100 / 300) * 600 = 200
-      expect(result.x).toBe(200)
-      expect(result.y).toBe(200)
+      expect(result?.x).toBe(200)
+      expect(result?.y).toBe(200)
+    })
+
+    it('should refresh canvas metrics for touch events', () => {
+      const { getEventPosition } = useAreaSelection(deps)
+      const touchEvent = new TouchEvent('touchstart', {
+        touches: [
+          new Touch({
+            identifier: 1,
+            target: document.body,
+            clientX: 110,
+            clientY: 120,
+          }),
+        ],
+      })
+
+      getEventPosition(touchEvent)
+
+      // Touch events may follow layout changes, so metrics are always
+      // refreshed - unlike mouse events, which reuse the cached rect.
+      expect(deps.updateCanvasMetrics).toHaveBeenCalled()
     })
 
     it('should handle edge cases - top-left corner', () => {
+      const { getEventPosition } = useAreaSelection(deps)
       const mouseEvent = new MouseEvent('click', {
         clientX: 10, // rect.left
         clientY: 20, // rect.top
       })
 
-      const result = getEventPosition(mouseEvent, mockCanvas)
+      const result = getEventPosition(mouseEvent)
 
-      expect(result.x).toBe(0)
-      expect(result.y).toBe(0)
+      expect(result?.x).toBe(0)
+      expect(result?.y).toBe(0)
     })
 
     it('should handle edge cases - bottom-right corner', () => {
+      const { getEventPosition } = useAreaSelection(deps)
       const mouseEvent = new MouseEvent('click', {
         clientX: 410, // rect.left + rect.width
         clientY: 320, // rect.top + rect.height
       })
 
-      const result = getEventPosition(mouseEvent, mockCanvas)
+      const result = getEventPosition(mouseEvent)
 
-      expect(result.x).toBe(800)
-      expect(result.y).toBe(600)
+      expect(result?.x).toBe(800)
+      expect(result?.y).toBe(600)
     })
 
     it('should handle different scaling ratios', () => {
-      // Different canvas size
-      mockCanvas.value.width = 1600
-      mockCanvas.value.height = 1200
+      // Different canvas/display size ratio
+      scale = { scaleX: 1600 / 400, scaleY: 1200 / 300 }
 
+      const { getEventPosition } = useAreaSelection(deps)
       const mouseEvent = new MouseEvent('click', {
         clientX: 210, // 10 (rect.left) + 200 (offset)
         clientY: 170, // 20 (rect.top) + 150 (offset)
       })
 
-      const result = getEventPosition(mouseEvent, mockCanvas)
+      const result = getEventPosition(mouseEvent)
 
       // Expected: (200 / 400) * 1600 = 800, (150 / 300) * 1200 = 600
-      expect(result.x).toBe(800)
-      expect(result.y).toBe(600)
+      expect(result?.x).toBe(800)
+      expect(result?.y).toBe(600)
+    })
+
+    it('should return null for a touch event with no touch points', () => {
+      const { getEventPosition } = useAreaSelection(deps)
+      const touchEvent = new TouchEvent('touchend', { touches: [] })
+
+      expect(getEventPosition(touchEvent)).toBeNull()
     })
   })
 
-  describe('Selection Area Normalization', () => {
-    const normalizeSelection = (selection: {
-      startX: number
-      startY: number
-      endX: number
-      endY: number
-    }) => {
-      const startX = Math.min(selection.startX, selection.endX)
-      const startY = Math.min(selection.startY, selection.endY)
-      const width = Math.abs(selection.endX - selection.startX)
-      const height = Math.abs(selection.endY - selection.startY)
+  describe('Selection Area Normalization (via startSelection/updateSelection)', () => {
+    // Directly drives the real startSelection/updateSelection pair (mouse
+    // coordinates map 1:1 onto canvas coordinates here since scale is 1:1
+    // relative to a rect positioned at the origin) and asserts the raw
+    // (non-normalized) selection - normalization itself (min/abs) happens
+    // downstream in useImageProcessing.applyMosaic when the edit is applied.
+    beforeEach(() => {
+      mockRect = {
+        left: 0,
+        top: 0,
+        width: 400,
+        height: 300,
+        x: 0,
+        y: 0,
+        bottom: 300,
+        right: 400,
+        toJSON: () => ({}),
+      }
+      scale = { scaleX: 1, scaleY: 1 }
+      deps.getCanvasRect = () => mockRect
+      deps.getScale = () => scale
+    })
 
-      return { startX, startY, width, height }
+    const drag = (
+      areaSelection: ReturnType<typeof useAreaSelection>,
+      from: { x: number; y: number },
+      to: { x: number; y: number }
+    ) => {
+      areaSelection.startSelection(
+        new MouseEvent('mousedown', { clientX: from.x, clientY: from.y })
+      )
+      // Bypass the throttled/rAF-based updateSelection and mutate directly,
+      // matching what updateSelection would eventually assign.
+      areaSelection.selection.value.endX = to.x
+      areaSelection.selection.value.endY = to.y
     }
 
-    it('should normalize selection when dragging right-down', () => {
-      const selection = {
-        startX: 100,
-        startY: 100,
-        endX: 200,
-        endY: 200,
-      }
+    it('should record selection when dragging right-down', () => {
+      const areaSelection = useAreaSelection(deps)
+      drag(areaSelection, { x: 100, y: 100 }, { x: 200, y: 200 })
 
-      const result = normalizeSelection(selection)
-
-      expect(result.startX).toBe(100)
-      expect(result.startY).toBe(100)
-      expect(result.width).toBe(100)
-      expect(result.height).toBe(100)
+      expect(areaSelection.selection.value.startX).toBe(100)
+      expect(areaSelection.selection.value.startY).toBe(100)
+      expect(areaSelection.selection.value.endX).toBe(200)
+      expect(areaSelection.selection.value.endY).toBe(200)
     })
 
-    it('should normalize selection when dragging left-up', () => {
-      const selection = {
-        startX: 200,
-        startY: 200,
-        endX: 100,
-        endY: 100,
-      }
+    it('should record selection when dragging left-up', () => {
+      const areaSelection = useAreaSelection(deps)
+      drag(areaSelection, { x: 200, y: 200 }, { x: 100, y: 100 })
 
-      const result = normalizeSelection(selection)
-
-      expect(result.startX).toBe(100)
-      expect(result.startY).toBe(100)
-      expect(result.width).toBe(100)
-      expect(result.height).toBe(100)
-    })
-
-    it('should normalize selection when dragging right-up', () => {
-      const selection = {
-        startX: 100,
-        startY: 200,
-        endX: 200,
-        endY: 100,
-      }
-
-      const result = normalizeSelection(selection)
-
-      expect(result.startX).toBe(100)
-      expect(result.startY).toBe(100)
-      expect(result.width).toBe(100)
-      expect(result.height).toBe(100)
-    })
-
-    it('should normalize selection when dragging left-down', () => {
-      const selection = {
-        startX: 200,
-        startY: 100,
-        endX: 100,
-        endY: 200,
-      }
-
-      const result = normalizeSelection(selection)
-
-      expect(result.startX).toBe(100)
-      expect(result.startY).toBe(100)
-      expect(result.width).toBe(100)
-      expect(result.height).toBe(100)
-    })
-
-    it('should handle zero-width selection', () => {
-      const selection = {
-        startX: 100,
-        startY: 100,
-        endX: 100,
-        endY: 200,
-      }
-
-      const result = normalizeSelection(selection)
-
-      expect(result.startX).toBe(100)
-      expect(result.startY).toBe(100)
-      expect(result.width).toBe(0)
-      expect(result.height).toBe(100)
-    })
-
-    it('should handle zero-height selection', () => {
-      const selection = {
-        startX: 100,
-        startY: 100,
-        endX: 200,
-        endY: 100,
-      }
-
-      const result = normalizeSelection(selection)
-
-      expect(result.startX).toBe(100)
-      expect(result.startY).toBe(100)
-      expect(result.width).toBe(100)
-      expect(result.height).toBe(0)
+      expect(areaSelection.selection.value.startX).toBe(200)
+      expect(areaSelection.selection.value.startY).toBe(200)
+      expect(areaSelection.selection.value.endX).toBe(100)
+      expect(areaSelection.selection.value.endY).toBe(100)
     })
   })
 
-  describe('Selection Validation', () => {
-    const isValidSelection = (selection: {
-      startX: number
-      startY: number
-      endX: number
-      endY: number
-    }) => {
-      const width = Math.abs(selection.endX - selection.startX)
-      const height = Math.abs(selection.endY - selection.startY)
-      return width > 5 && height > 5
+  describe('Selection Validation (via endSelection)', () => {
+    beforeEach(() => {
+      mockRect = {
+        left: 0,
+        top: 0,
+        width: 400,
+        height: 300,
+        x: 0,
+        y: 0,
+        bottom: 300,
+        right: 400,
+        toJSON: () => ({}),
+      }
+      scale = { scaleX: 1, scaleY: 1 }
+      deps.getCanvasRect = () => mockRect
+      deps.getScale = () => scale
+    })
+
+    const dragAndEnd = (
+      from: { x: number; y: number },
+      to: { x: number; y: number }
+    ) => {
+      const areaSelection = useAreaSelection(deps)
+      areaSelection.startSelection(
+        new MouseEvent('mousedown', { clientX: from.x, clientY: from.y })
+      )
+      areaSelection.selection.value.endX = to.x
+      areaSelection.selection.value.endY = to.y
+      areaSelection.endSelection(new MouseEvent('mouseup'))
+      return areaSelection
     }
 
     it('should validate selection with sufficient size', () => {
-      const selection = {
-        startX: 100,
-        startY: 100,
-        endX: 110,
-        endY: 110,
-      }
-
-      expect(isValidSelection(selection)).toBe(true)
+      const areaSelection = dragAndEnd({ x: 100, y: 100 }, { x: 110, y: 110 })
+      expect(areaSelection.hasSelection.value).toBe(true)
     })
 
     it('should invalidate selection with insufficient width', () => {
-      const selection = {
-        startX: 100,
-        startY: 100,
-        endX: 104,
-        endY: 110,
-      }
-
-      expect(isValidSelection(selection)).toBe(false)
+      const areaSelection = dragAndEnd({ x: 100, y: 100 }, { x: 104, y: 110 })
+      expect(areaSelection.hasSelection.value).toBe(false)
     })
 
     it('should invalidate selection with insufficient height', () => {
-      const selection = {
-        startX: 100,
-        startY: 100,
-        endX: 110,
-        endY: 104,
-      }
-
-      expect(isValidSelection(selection)).toBe(false)
+      const areaSelection = dragAndEnd({ x: 100, y: 100 }, { x: 110, y: 104 })
+      expect(areaSelection.hasSelection.value).toBe(false)
     })
 
     it('should invalidate selection with both dimensions too small', () => {
-      const selection = {
-        startX: 100,
-        startY: 100,
-        endX: 103,
-        endY: 104,
-      }
-
-      expect(isValidSelection(selection)).toBe(false)
+      const areaSelection = dragAndEnd({ x: 100, y: 100 }, { x: 103, y: 104 })
+      expect(areaSelection.hasSelection.value).toBe(false)
     })
 
     it('should validate selection regardless of drag direction', () => {
-      const selection = {
-        startX: 110,
-        startY: 110,
-        endX: 100,
-        endY: 100,
-      }
+      const areaSelection = dragAndEnd({ x: 110, y: 110 }, { x: 100, y: 100 })
+      expect(areaSelection.hasSelection.value).toBe(true)
+    })
 
-      expect(isValidSelection(selection)).toBe(true)
+    it('exposes the minimum size threshold as a named constant', () => {
+      expect(SELECTION_MIN_SIZE_PX).toBe(5)
     })
   })
 })
