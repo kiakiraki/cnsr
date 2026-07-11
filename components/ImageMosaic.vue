@@ -1,7 +1,20 @@
 <template>
   <div class="image-mosaic-container">
-    <div v-if="errorMessage" class="error-message" @click="errorMessage = null">
-      {{ errorMessage }}
+    <div
+      v-if="errorMessage"
+      class="error-message"
+      role="alert"
+      aria-live="assertive"
+    >
+      <span>{{ errorMessage }}</span>
+      <button
+        type="button"
+        class="error-close-btn"
+        aria-label="エラーを閉じる"
+        @click="errorMessage = null"
+      >
+        ×
+      </button>
     </div>
 
     <div
@@ -29,6 +42,8 @@
             fill="none"
             stroke="currentColor"
             stroke-width="2"
+            aria-hidden="true"
+            focusable="false"
           >
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
             <polyline points="17,8 12,3 7,8" />
@@ -43,27 +58,47 @@
     </div>
 
     <div v-if="uploadedImage" class="image-editor">
-      <div class="mode-selector">
-        <label class="mode-label">処理モード:</label>
+      <fieldset class="mode-selector">
+        <legend class="mode-label">処理モード:</legend>
         <div class="radio-group">
           <label class="radio-option">
-            <input v-model="processingMode" type="radio" value="blackfill" />
+            <input
+              v-model="processingMode"
+              type="radio"
+              name="processingMode"
+              value="blackfill"
+            />
             <span>黒塗り</span>
           </label>
           <label class="radio-option">
-            <input v-model="processingMode" type="radio" value="whitefill" />
+            <input
+              v-model="processingMode"
+              type="radio"
+              name="processingMode"
+              value="whitefill"
+            />
             <span>白塗り</span>
           </label>
           <label class="radio-option">
-            <input v-model="processingMode" type="radio" value="mosaic" />
+            <input
+              v-model="processingMode"
+              type="radio"
+              name="processingMode"
+              value="mosaic"
+            />
             <span>モザイク</span>
           </label>
           <label class="radio-option">
-            <input v-model="processingMode" type="radio" value="blur" />
+            <input
+              v-model="processingMode"
+              type="radio"
+              name="processingMode"
+              value="blur"
+            />
             <span>ブラー</span>
           </label>
         </div>
-      </div>
+      </fieldset>
 
       <div class="editor-controls">
         <button class="btn btn-secondary" @click="resetImage">
@@ -87,10 +122,25 @@
           v-if="uploadedImage"
           class="btn btn-success"
           :disabled="!hasProcessedImage"
+          :aria-describedby="
+            !hasProcessedImage ? 'download-disabled-hint' : undefined
+          "
+          :title="
+            !hasProcessedImage
+              ? '範囲を選択して処理を適用すると有効になります'
+              : undefined
+          "
           @click="downloadImage"
         >
           ダウンロード
         </button>
+        <span
+          v-if="!hasProcessedImage"
+          id="download-disabled-hint"
+          class="sr-only"
+        >
+          範囲を選択して処理を適用するとダウンロードできます
+        </span>
       </div>
 
       <div ref="canvasContainer" class="canvas-container">
@@ -98,12 +148,16 @@
           <canvas
             ref="canvas"
             class="image-canvas"
+            tabindex="0"
+            role="application"
+            aria-label="画像編集キャンバス。矢印キーで選択範囲を移動、Shift+矢印キーでサイズ変更、Enterで処理を適用、Escapeで選択解除"
             @mousedown="startSelection"
             @mousemove="updateSelection"
             @mouseup="endSelection"
             @touchstart="startSelection"
             @touchmove="updateSelection"
             @touchend="endSelection"
+            @keydown="handleCanvasKeyDown"
           />
           <canvas ref="overlayCanvas" class="selection-overlay" />
         </div>
@@ -116,7 +170,10 @@
 import { useCanvasRenderer } from '~/composables/useCanvasRenderer'
 import { useUndoHistory } from '~/composables/useUndoHistory'
 import { useImageProcessing } from '~/composables/useImageProcessing'
-import { useAreaSelection, type SelectionArea } from '~/composables/useAreaSelection'
+import {
+  useAreaSelection,
+  type SelectionArea,
+} from '~/composables/useAreaSelection'
 import { useImageUpload } from '~/composables/useImageUpload'
 import { generateDownloadFilename } from '~/utils/downloadFilename'
 
@@ -169,17 +226,23 @@ const handleSelectionEnd = (selection: SelectionArea) => {
   }
 }
 
-// -- Drag-to-select area on the canvas --
-const { startSelection, updateSelection, endSelection, clearSelectionState } =
-  useAreaSelection({
-    canvas,
-    updateCanvasMetrics,
-    getCanvasRect,
-    getScale,
-    redrawCanvas,
-    clearOverlay,
-    onSelectionEnd: handleSelectionEnd,
-  })
+// -- Drag-to-select area on the canvas (mouse/touch) and keyboard-driven
+// selection (arrow keys/Enter/Escape) - both share the same selection state.
+const {
+  startSelection,
+  updateSelection,
+  endSelection,
+  clearSelectionState,
+  handleCanvasKeyDown,
+} = useAreaSelection({
+  canvas,
+  updateCanvasMetrics,
+  getCanvasRect,
+  getScale,
+  redrawCanvas,
+  clearOverlay,
+  onSelectionEnd: handleSelectionEnd,
+})
 
 // -- Upload/drag-drop/paste + error banner --
 const {
@@ -262,17 +325,42 @@ const downloadImage = () => {
 }
 
 .error-message {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   background-color: #f8d7da;
   color: #721c24;
   border: 1px solid #f5c6cb;
   border-radius: 8px;
   padding: 12px 16px;
   margin-bottom: 16px;
-  cursor: pointer;
   transition: opacity 0.3s ease;
 }
 
+.error-close-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 20px;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+}
+
+.error-close-btn:hover {
+  opacity: 0.7;
+}
+
+.error-close-btn:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
 .upload-area {
+  position: relative;
   border: 2px dashed #ccc;
   border-radius: 10px;
   padding: 40px;
@@ -289,8 +377,30 @@ const downloadImage = () => {
   background-color: rgba(0, 123, 255, 0.1);
 }
 
+/* Visually hidden but still focusable/reachable by keyboard (sr-only
+ * technique) - unlike display:none, this keeps the input in the Tab order
+ * so Enter/Space (native label+input behavior) can open the file dialog. */
 .file-input {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Generic visually-hidden utility, used for text that should only be
+ * exposed to assistive technology (e.g. the download button's disabled
+ * reason). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .upload-label {
@@ -298,6 +408,14 @@ const downloadImage = () => {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* Visual focus ring on the label when the (visually hidden) file input
+ * receives keyboard focus. */
+.upload-area:focus-within .upload-label {
+  outline: 3px solid #007bff;
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .upload-content {
@@ -313,7 +431,8 @@ const downloadImage = () => {
 
 .upload-hint {
   font-size: 14px;
-  color: #999;
+  /* #767676 keeps a >=4.5:1 contrast ratio against the white background. */
+  color: #767676;
   margin-top: 8px;
 }
 
@@ -361,12 +480,14 @@ const downloadImage = () => {
 }
 
 .btn-success {
-  background-color: #28a745;
+  /* #1e7e34 keeps a >=4.5:1 contrast ratio for the white label text
+   * (the original #28a745 only reached ~3.1:1). */
+  background-color: #1e7e34;
   color: white;
 }
 
 .btn-success:hover:not(:disabled) {
-  background-color: #1e7e34;
+  background-color: #196b2c;
 }
 
 .btn-success:disabled {
@@ -376,12 +497,14 @@ const downloadImage = () => {
 }
 
 .btn-info {
-  background-color: #17a2b8;
+  /* #128193 keeps a >=4.5:1 contrast ratio for the white label text
+   * (the original #17a2b8 only reached ~3.0:1). */
+  background-color: #128193;
   color: white;
 }
 
 .btn-info:hover:not(:disabled) {
-  background-color: #138496;
+  background-color: #0e6978;
 }
 
 .btn-info:disabled {
@@ -406,7 +529,10 @@ const downloadImage = () => {
 }
 
 .mode-selector {
-  margin-bottom: 20px;
+  /* Reset the browser default fieldset margin/min-width so it lays out
+   * identically to the plain <div> it used to be. */
+  min-width: 0;
+  margin: 0 0 20px;
   padding: 15px;
   background-color: #f8f9fa;
   border-radius: 8px;
@@ -414,6 +540,10 @@ const downloadImage = () => {
 }
 
 .mode-label {
+  /* Reset the browser default legend padding/border so it looks like the
+   * plain <label> it used to be. */
+  padding: 0;
+  border: none;
   display: block;
   font-weight: bold;
   margin-bottom: 10px;
@@ -474,6 +604,11 @@ const downloadImage = () => {
   touch-action: none;
 }
 
+.image-canvas:focus-visible {
+  outline: 3px solid #007bff;
+  outline-offset: -3px;
+}
+
 /* Drag-selection rectangle is drawn here instead of on the main canvas, so
  * dragging never needs to putImageData the full image every frame. */
 .selection-overlay {
@@ -530,7 +665,8 @@ const downloadImage = () => {
   }
 
   .upload-hint {
-    color: #888;
+    /* #a8a8a8 keeps a >=4.5:1 contrast ratio against the dark background. */
+    color: #a8a8a8;
   }
 
   .mode-selector {
