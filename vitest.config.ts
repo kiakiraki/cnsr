@@ -7,5 +7,10 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./test/setup.ts'],
+    coverage: {
+      provider: 'v8',
+      include: ['components/**/*.vue', 'composables/**/*.ts'],
+      reporter: ['text', 'html'],
+    },
   },
 })

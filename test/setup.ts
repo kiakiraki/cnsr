@@ -29,19 +29,19 @@ const mockCanvas = {
 }
 
 // Mock HTML Canvas Element
-global.HTMLCanvasElement = vi.fn(
+globalThis.HTMLCanvasElement = vi.fn(
   () => mockCanvas
 ) as unknown as typeof HTMLCanvasElement
 
 // Mock FileReader
-global.FileReader = vi.fn(() => ({
+globalThis.FileReader = vi.fn(() => ({
   readAsDataURL: vi.fn(),
   result: 'data:image/png;base64,fake-image-data',
   onload: null,
 })) as unknown as typeof FileReader
 
 // Mock Image
-global.Image = vi.fn(() => ({
+globalThis.Image = vi.fn(() => ({
   src: '',
   onload: null,
   width: 100,
@@ -49,10 +49,10 @@ global.Image = vi.fn(() => ({
 })) as unknown as typeof Image
 
 // Mock URL.createObjectURL
-global.URL.createObjectURL = vi.fn(() => 'blob:fake-url')
+globalThis.URL.createObjectURL = vi.fn(() => 'blob:fake-url')
 
 // Mock Touch API
-global.Touch = class Touch {
+globalThis.Touch = class Touch {
   identifier: number
   target: EventTarget
   clientX: number
@@ -83,7 +83,7 @@ global.Touch = class Touch {
 } as unknown as typeof Touch
 
 // Mock TouchEvent
-global.TouchEvent = class TouchEvent extends Event {
+globalThis.TouchEvent = class TouchEvent extends Event {
   touches: TouchList
   targetTouches: TouchList
   changedTouches: TouchList

@@ -1,22 +1,43 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
 
+// Minimal mock shape for ImageData used by these tests. The real ImageData
+// interface requires a `colorSpace` property that the test fixtures don't
+// need, so we model only what the tests actually construct/consume.
+type MockImageData = {
+  data: Uint8ClampedArray | string
+  width?: number
+  height?: number
+}
+
+// Minimal mock shape for CanvasRenderingContext2D. Using vi.fn()'s own
+// return type (rather than a cast to the real DOM type) keeps mock helpers
+// like `mockReturnValue` available on these properties.
+type MockCtx = {
+  putImageData: ReturnType<typeof vi.fn<(...args: unknown[]) => void>>
+  getImageData: ReturnType<
+    typeof vi.fn<(...args: unknown[]) => MockImageData | null>
+  >
+  fillStyle: string
+  fillRect: ReturnType<typeof vi.fn<(...args: unknown[]) => void>>
+}
+
 describe('Undo Functionality', () => {
-  let undoStack: { value: ImageData[] }
+  let undoStack: { value: (MockImageData | null)[] }
   let canUndo: { value: boolean }
   let mockCanvas: {
     value: {
       width: number
       height: number
-      getContext: () => CanvasRenderingContext2D
+      getContext: () => MockCtx | null
     }
   }
-  let mockCtx: CanvasRenderingContext2D | null
-  let originalImageData: ImageData | null
+  let mockCtx: MockCtx | null
+  let originalImageData: MockImageData | null
   const MAX_UNDO_LEVELS = 64
 
   beforeEach(() => {
-    undoStack = ref<ImageData[]>([])
+    undoStack = ref<(MockImageData | null)[]>([])
     canUndo = ref(false)
     originalImageData = {
       data: new Uint8ClampedArray([255, 255, 255, 255]), // White pixel
@@ -40,7 +61,7 @@ describe('Undo Functionality', () => {
     }
   })
 
-  const addToUndoStack = (imageData: ImageData | null) => {
+  const addToUndoStack = (imageData: MockImageData | null) => {
     undoStack.value.push(imageData)
     if (undoStack.value.length > MAX_UNDO_LEVELS) {
       undoStack.value.shift()
@@ -49,8 +70,10 @@ describe('Undo Functionality', () => {
   }
 
   const applyProcessing = (processType: 'blackfill' | 'mosaic') => {
-    // Save current state to undo stack before making changes
-    const currentState = mockCtx.getImageData(
+    // Save current state to undo stack before making changes.
+    // mockCtx is always populated by beforeEach for these tests (only the
+    // "Edge Cases" tests below null it out, and they don't call this helper).
+    const currentState = mockCtx!.getImageData(
       0,
       0,
       mockCanvas.value.width,
@@ -60,16 +83,16 @@ describe('Undo Functionality', () => {
 
     // Apply processing (mocked)
     if (processType === 'blackfill') {
-      mockCtx.fillStyle = '#000000'
-      mockCtx.fillRect(0, 0, 100, 100)
+      mockCtx!.fillStyle = '#000000'
+      mockCtx!.fillRect(0, 0, 100, 100)
     } else if (processType === 'mosaic') {
       // Mock mosaic processing
-      mockCtx.fillStyle = '#888888'
-      mockCtx.fillRect(0, 0, 100, 100)
+      mockCtx!.fillStyle = '#888888'
+      mockCtx!.fillRect(0, 0, 100, 100)
     }
 
     // Update original image data
-    originalImageData = mockCtx.getImageData(
+    originalImageData = mockCtx!.getImageData(
       0,
       0,
       mockCanvas.value.width,
@@ -116,7 +139,7 @@ describe('Undo Functionality', () => {
 
       expect(undoStack.value.length).toBe(1)
       expect(canUndo.value).toBe(true)
-      expect(mockCtx.getImageData).toHaveBeenCalled()
+      expect(mockCtx!.getImageData).toHaveBeenCalled()
     })
 
     it('should maintain undo stack size limit', () => {
@@ -142,7 +165,7 @@ describe('Undo Functionality', () => {
           data: new Uint8ClampedArray([i, i, i, 255]),
           width: 1,
           height: 1,
-        } as ImageData)
+        })
       }
 
       expect(undoStack.value.length).toBe(MAX_UNDO_LEVELS)
@@ -156,7 +179,7 @@ describe('Undo Functionality', () => {
       const result = undoLastAction()
 
       expect(result).toBe(true)
-      expect(mockCtx.putImageData).toHaveBeenCalled()
+      expect(mockCtx!.putImageData).toHaveBeenCalled()
       expect(undoStack.value.length).toBe(0)
       expect(canUndo.value).toBe(false)
     })
@@ -165,7 +188,7 @@ describe('Undo Functionality', () => {
       const result = undoLastAction()
 
       expect(result).toBe(false)
-      expect(mockCtx.putImageData).not.toHaveBeenCalled()
+      expect(mockCtx!.putImageData).not.toHaveBeenCalled()
       expect(canUndo.value).toBe(false)
     })
 
@@ -201,12 +224,12 @@ describe('Undo Functionality', () => {
       }
 
       // Mock getImageData to return specific data
-      mockCtx.getImageData.mockReturnValue(mockImageData)
+      mockCtx!.getImageData.mockReturnValue(mockImageData)
 
       applyProcessing('blackfill')
       undoLastAction()
 
-      expect(mockCtx.putImageData).toHaveBeenCalledWith(mockImageData, 0, 0)
+      expect(mockCtx!.putImageData).toHaveBeenCalledWith(mockImageData, 0, 0)
     })
   })
 
@@ -222,7 +245,7 @@ describe('Undo Functionality', () => {
 
       expect(undoStack.value.length).toBe(0)
       expect(canUndo.value).toBe(false)
-      expect(mockCtx.putImageData).toHaveBeenCalled()
+      expect(mockCtx!.putImageData).toHaveBeenCalled()
     })
 
     it('should clear undo stack on reset', () => {
@@ -241,14 +264,14 @@ describe('Undo Functionality', () => {
     it('should save state before blackfill processing', () => {
       applyProcessing('blackfill')
 
-      expect(mockCtx.getImageData).toHaveBeenCalledWith(
+      expect(mockCtx!.getImageData).toHaveBeenCalledWith(
         0,
         0,
         mockCanvas.value.width,
         mockCanvas.value.height
       )
-      expect(mockCtx.fillStyle).toBe('#000000')
-      expect(mockCtx.fillRect).toHaveBeenCalled()
+      expect(mockCtx!.fillStyle).toBe('#000000')
+      expect(mockCtx!.fillRect).toHaveBeenCalled()
       expect(undoStack.value.length).toBe(1)
       expect(canUndo.value).toBe(true)
     })
@@ -256,14 +279,14 @@ describe('Undo Functionality', () => {
     it('should save state before mosaic processing', () => {
       applyProcessing('mosaic')
 
-      expect(mockCtx.getImageData).toHaveBeenCalledWith(
+      expect(mockCtx!.getImageData).toHaveBeenCalledWith(
         0,
         0,
         mockCanvas.value.width,
         mockCanvas.value.height
       )
-      expect(mockCtx.fillStyle).toBe('#888888')
-      expect(mockCtx.fillRect).toHaveBeenCalled()
+      expect(mockCtx!.fillStyle).toBe('#888888')
+      expect(mockCtx!.fillRect).toHaveBeenCalled()
       expect(undoStack.value.length).toBe(1)
       expect(canUndo.value).toBe(true)
     })
@@ -309,7 +332,7 @@ describe('Undo Functionality', () => {
 
     it('should handle processing with empty original image data', () => {
       originalImageData = null
-      mockCtx.getImageData.mockReturnValue(null)
+      mockCtx!.getImageData.mockReturnValue(null)
 
       applyProcessing('blackfill')
 

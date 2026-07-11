@@ -53,8 +53,8 @@ describe('Coordinate Calculation', () => {
       clientX = event.clientX
       clientY = event.clientY
     } else {
-      clientX = event.touches[0].clientX
-      clientY = event.touches[0].clientY
+      clientX = event.touches[0]!.clientX
+      clientY = event.touches[0]!.clientY
     }
 
     return {

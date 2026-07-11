@@ -286,8 +286,8 @@ const handleDrop = (event: DragEvent) => {
   isDragOver.value = false
 
   const files = event.dataTransfer?.files
-  if (files && files.length > 0) {
-    const file = files[0]
+  const file = files?.[0]
+  if (file) {
     if (!file.type.startsWith('image/')) {
       showError('画像ファイルを選択してください')
       return
@@ -354,6 +354,7 @@ const getEventPosition = (event: MouseEvent | TouchEvent) => {
   } else {
     // For touch events, use the first touch point
     const touch = event.touches[0] || event.changedTouches[0]
+    if (!touch) return null
     clientX = touch.clientX
     clientY = touch.clientY
   }
@@ -379,6 +380,7 @@ const startSelection = (event: MouseEvent | TouchEvent) => {
   }
 
   const pos = getEventPosition(event)
+  if (!pos) return
   selection.value = {
     startX: pos.x,
     startY: pos.y,
@@ -410,9 +412,11 @@ const updateSelection = (event: MouseEvent | TouchEvent) => {
 
   animationFrameId = requestAnimationFrame(() => {
     const pos = getEventPosition(event)
-    selection.value.endX = pos.x
-    selection.value.endY = pos.y
-    redrawCanvas()
+    if (pos) {
+      selection.value.endX = pos.x
+      selection.value.endY = pos.y
+      redrawCanvas()
+    }
     animationFrameId = null
   })
 }
@@ -658,7 +662,7 @@ const handlePaste = (event: ClipboardEvent) => {
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
-    if (item.type.startsWith('image/')) {
+    if (item?.type.startsWith('image/')) {
       event.preventDefault()
       const file = item.getAsFile()
       if (file) {

@@ -4,12 +4,12 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   app: {
     head: {
+      htmlAttrs: { lang: 'ja' },
       title: 'CNSR - 画像モザイク処理',
       meta: [
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
         {
-          hid: 'description',
           name: 'description',
           content:
             '画像をアップロードして選択した領域にモザイク処理を適用できるWebアプリケーション',
