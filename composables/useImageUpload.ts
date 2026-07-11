@@ -7,56 +7,74 @@ export const RESIZE_MAX_DIMENSION = 1920
 // How long an error banner stays visible before auto-dismissing.
 export const ERROR_DISPLAY_MS = 5000
 
+/** Anything resizeImageIfNeeded can take as input: an already-decoded
+ * bitmap (from createImageBitmap) or a loaded <img> element (fallback
+ * decode path). Both expose plain numeric width/height. */
+export type DecodedImage = HTMLImageElement | ImageBitmap
+
+export interface ResizedImage {
+  /** Directly usable as a drawImage source - a canvas when downscaled
+   * (no toDataURL/Image round-trip needed), otherwise the original
+   * decoded image unchanged. */
+  image: DecodedImage | HTMLCanvasElement
+  width: number
+  height: number
+}
+
 /**
  * Downscales an image so its longest side is at most RESIZE_MAX_DIMENSION,
- * preserving aspect ratio. Resolves with the original image unchanged if it
- * is already small enough.
+ * preserving aspect ratio. Returns the original image unchanged (wrapped
+ * with its dimensions) if it is already small enough. Synchronous: when
+ * resizing is needed, the resize canvas itself is returned as the drawable
+ * image rather than being re-encoded through toDataURL/new Image.
  */
-export function resizeImageIfNeeded(
-  img: HTMLImageElement
-): Promise<HTMLImageElement> {
-  const maxDimension = Math.max(img.width, img.height)
+export function resizeImageIfNeeded(source: DecodedImage): ResizedImage {
+  const width = source.width
+  const height = source.height
+  const maxDimension = Math.max(width, height)
 
   if (maxDimension <= RESIZE_MAX_DIMENSION) {
-    return Promise.resolve(img) // No resizing needed
+    return { image: source, width, height } // No resizing needed
   }
 
-  return new Promise((resolve, reject) => {
-    // Calculate new dimensions maintaining aspect ratio
-    const ratio = RESIZE_MAX_DIMENSION / maxDimension
-    const newWidth = Math.floor(img.width * ratio)
-    const newHeight = Math.floor(img.height * ratio)
+  // Calculate new dimensions maintaining aspect ratio
+  const ratio = RESIZE_MAX_DIMENSION / maxDimension
+  const newWidth = Math.floor(width * ratio)
+  const newHeight = Math.floor(height * ratio)
 
-    // Create canvas for resizing
-    const resizeCanvas = document.createElement('canvas')
-    const resizeCtx = resizeCanvas.getContext('2d')!
-    resizeCanvas.width = newWidth
-    resizeCanvas.height = newHeight
+  // Create canvas for resizing and use it directly as the drawable image -
+  // no toDataURL()/new Image() round-trip through Base64 needed.
+  const resizeCanvas = document.createElement('canvas')
+  const resizeCtx = resizeCanvas.getContext('2d')!
+  resizeCanvas.width = newWidth
+  resizeCanvas.height = newHeight
+  resizeCtx.drawImage(source, 0, 0, newWidth, newHeight)
 
-    // Draw resized image
-    resizeCtx.drawImage(img, 0, 0, newWidth, newHeight)
-
-    // Create new image from resized canvas
-    const resizedImg = new Image()
-    resizedImg.onload = () => resolve(resizedImg)
-    resizedImg.onerror = () =>
-      reject(new Error('リサイズ後の画像の読み込みに失敗しました'))
-    // PNG形式で透過情報（アルファチャンネル）を保持する
-    resizedImg.src = resizeCanvas.toDataURL('image/png')
-  })
+  return { image: resizeCanvas, width: newWidth, height: newHeight }
 }
 
 export interface UseImageUploadOptions {
-  /** Called once the uploaded image data URL is ready to be drawn. */
-  onImageReady?: (dataUrl: string) => void
+  /**
+   * Called once the uploaded image is ready to be drawn. Receives an
+   * ImageBitmap when createImageBitmap() decoded the file directly (no
+   * Base64 involved), or a data URL string when falling back to
+   * FileReader.readAsDataURL (e.g. in environments without
+   * createImageBitmap, such as the jsdom test environment).
+   */
+  onImageReady?: (source: ImageBitmap | string) => void
   /** Called after this composable's own state has been cleared by resetImage(). */
   onReset?: () => void
 }
 
 export function useImageUpload(options: UseImageUploadOptions = {}) {
   const fileInput = ref<HTMLInputElement>()
-  const uploadedImage = ref<string | null>(null)
-  const processedImage = ref<string | null>(null)
+  // Whether an image has been uploaded. Booleanized rather than holding the
+  // decoded/Base64 data itself - the template only ever needs truthiness
+  // (v-if), and the actual image data now lives in useCanvasRenderer.
+  const uploadedImage = ref(false)
+  // Whether the canvas currently holds a downloadable (processed-or-loaded)
+  // image. See useImageUpload's sibling composables for who flips this.
+  const hasProcessedImage = ref(false)
   const originalFileName = ref<string>('')
   const isDragOver = ref(false)
   const errorMessage = ref<string | null>(null)
@@ -79,10 +97,29 @@ export function useImageUpload(options: UseImageUploadOptions = {}) {
 
   const processImageFile = (file: File) => {
     originalFileName.value = file.name
+
+    // Fast path: decode straight from the File/Blob, skipping the
+    // FileReader -> Base64 data URL -> <img> round-trip entirely.
+    if (typeof createImageBitmap === 'function') {
+      createImageBitmap(file)
+        .then(bitmap => {
+          uploadedImage.value = true
+          nextTick(() => {
+            options.onImageReady?.(bitmap)
+          })
+        })
+        .catch(() => {
+          showError('画像の読み込みに失敗しました')
+        })
+      return
+    }
+
+    // Fallback path (e.g. jsdom test environment / browsers without
+    // createImageBitmap): read as a Base64 data URL as before.
     const reader = new FileReader()
     reader.onload = e => {
       const dataUrl = e.target?.result as string
-      uploadedImage.value = dataUrl
+      uploadedImage.value = true
       nextTick(() => {
         options.onImageReady?.(dataUrl)
       })
@@ -163,8 +200,8 @@ export function useImageUpload(options: UseImageUploadOptions = {}) {
   }
 
   const resetImage = () => {
-    uploadedImage.value = null
-    processedImage.value = null
+    uploadedImage.value = false
+    hasProcessedImage.value = false
     originalFileName.value = ''
     if (fileInput.value) {
       fileInput.value.value = ''
@@ -187,7 +224,7 @@ export function useImageUpload(options: UseImageUploadOptions = {}) {
   return {
     fileInput,
     uploadedImage,
-    processedImage,
+    hasProcessedImage,
     originalFileName,
     isDragOver,
     errorMessage,

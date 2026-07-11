@@ -124,12 +124,13 @@ describe('Download Functionality', () => {
       processImageFile(file)
 
       expect(originalFileName.value).toBe('test-image.jpg')
-      // uploadedImage is populated asynchronously once FileReader.onload
-      // fires; synchronously it is still unset.
-      expect(uploadedImage.value).toBeNull()
+      // uploadedImage flips to true asynchronously once the image is
+      // decoded (FileReader.onload in the jsdom fallback path used here);
+      // synchronously it is still false.
+      expect(uploadedImage.value).toBe(false)
     })
 
-    it('should populate uploadedImage once FileReader finishes reading', async () => {
+    it('should flip uploadedImage to true once decoding finishes', async () => {
       const { uploadedImage, processImageFile } = useImageUpload()
       const file = new File(['fake'], 'test-image.jpg', {
         type: 'image/jpeg',
@@ -138,16 +139,14 @@ describe('Download Functionality', () => {
       processImageFile(file)
       await new Promise(resolve => setTimeout(resolve, 20))
 
-      expect(uploadedImage.value).toBe(
-        'data:image/png;base64,fake-image-data'
-      )
+      expect(uploadedImage.value).toBe(true)
     })
 
     it('should reset filename and images when resetImage is called', () => {
       const {
         originalFileName,
         uploadedImage,
-        processedImage,
+        hasProcessedImage,
         processImageFile,
         resetImage,
       } = useImageUpload()
@@ -157,48 +156,48 @@ describe('Download Functionality', () => {
       resetImage()
 
       expect(originalFileName.value).toBe('')
-      expect(uploadedImage.value).toBeNull()
-      expect(processedImage.value).toBeNull()
+      expect(uploadedImage.value).toBe(false)
+      expect(hasProcessedImage.value).toBe(false)
     })
 
     it('should invoke onReset after clearing its own state', () => {
-      let stateAtResetTime: { uploadedImage: string | null } | null = null
+      let stateAtResetTime: { uploadedImage: boolean } | null = null
       const { uploadedImage, resetImage } = useImageUpload({
         onReset: () => {
           stateAtResetTime = { uploadedImage: uploadedImage.value }
         },
       })
-      uploadedImage.value = 'data:image/png;base64,fake-data'
+      uploadedImage.value = true
 
       resetImage()
 
-      expect(stateAtResetTime).toEqual({ uploadedImage: null })
+      expect(stateAtResetTime).toEqual({ uploadedImage: false })
     })
   })
 
   describe('Download State Management', () => {
-    let processedImage: { value: string | null }
+    let hasProcessedImage: { value: boolean }
 
     beforeEach(() => {
-      processedImage = { value: null }
+      hasProcessedImage = { value: false }
     })
 
-    const canDownload = () => processedImage.value !== null
+    const canDownload = () => hasProcessedImage.value
 
     it('should not allow download when there is no processed image', () => {
       expect(canDownload()).toBe(false)
     })
 
     it('should allow download once a processed image exists', () => {
-      processedImage.value = 'data:image/png;base64,processed-data'
+      hasProcessedImage.value = true
       expect(canDownload()).toBe(true)
     })
 
-    it('should reflect processedImage from useImageUpload directly', () => {
-      const { processedImage: pImg } = useImageUpload()
-      expect(pImg.value).toBeNull()
-      pImg.value = 'data:image/png;base64,processed-data'
-      expect(pImg.value).not.toBeNull()
+    it('should reflect hasProcessedImage from useImageUpload directly', () => {
+      const { hasProcessedImage: flag } = useImageUpload()
+      expect(flag.value).toBe(false)
+      flag.value = true
+      expect(flag.value).toBe(true)
     })
   })
 })

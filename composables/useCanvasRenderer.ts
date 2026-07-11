@@ -1,11 +1,11 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { resizeImageIfNeeded } from './useImageUpload'
+import { resizeImageIfNeeded, type DecodedImage } from './useImageUpload'
 import type { SelectionArea } from './useAreaSelection'
 
 export interface LoadImageCallbacks {
-  /** The <img> element itself failed to decode/load. */
+  /** The <img> element itself failed to decode/load (data URL fallback path only). */
   onLoadError?: () => void
-  /** Resizing/drawing the successfully-loaded image failed. */
+  /** Resizing/drawing the successfully-decoded image failed. */
   onProcessError?: () => void
   /** The image was successfully drawn to the canvas. */
   onSuccess?: () => void
@@ -22,10 +22,16 @@ export interface LoadImageCallbacks {
 export function useCanvasRenderer() {
   const canvas = ref<HTMLCanvasElement>()
   const canvasContainer = ref<HTMLDivElement>()
+  // Transparent canvas stacked on top of `canvas`, used to draw the
+  // in-progress drag-selection rectangle. Keeping selection visuals off the
+  // main canvas means dragging never needs to touch (let alone
+  // putImageData-restore) the full image data.
+  const overlayCanvas = ref<HTMLCanvasElement>()
 
   let ctx: CanvasRenderingContext2D | null = null
+  let overlayCtx: CanvasRenderingContext2D | null = null
   let originalImageData: ImageData | null = null
-  let currentImage: HTMLImageElement | null = null
+  let currentImage: DecodedImage | HTMLCanvasElement | null = null
 
   // Reactive mirrors of canvas.width/canvas.height. canvas.width/height are
   // plain DOM properties, not reactive - a computed that reads them
@@ -78,76 +84,96 @@ export function useCanvasRenderer() {
   }
   const getCurrentImage = () => currentImage
 
+  /** Sizes the overlay canvas to match the main canvas and (re)creates its
+   * 2D context. Called whenever the main canvas itself is (re)sized. */
+  const syncOverlaySize = (width: number, height: number) => {
+    if (!overlayCanvas.value) return
+    overlayCanvas.value.width = width
+    overlayCanvas.value.height = height
+    overlayCtx = overlayCanvas.value.getContext('2d')
+  }
+
+  const drawDecodedImage = (
+    source: DecodedImage,
+    callbacks: LoadImageCallbacks
+  ) => {
+    try {
+      const resized = resizeImageIfNeeded(source)
+
+      currentImage = resized.image
+      const canvasEl = canvas.value!
+      ctx = canvasEl.getContext('2d')!
+
+      canvasEl.width = resized.width
+      canvasEl.height = resized.height
+      imageWidth.value = resized.width
+      imageHeight.value = resized.height
+      syncOverlaySize(resized.width, resized.height)
+
+      ctx.drawImage(resized.image, 0, 0, resized.width, resized.height)
+      originalImageData = ctx.getImageData(0, 0, resized.width, resized.height)
+
+      // Update canvas metrics for optimized coordinate calculations
+      updateCanvasMetrics()
+
+      callbacks.onSuccess?.()
+    } catch {
+      callbacks.onProcessError?.()
+    }
+  }
+
   const loadImageToCanvas = (
-    imageSrc: string,
+    source: ImageBitmap | string,
     callbacks: LoadImageCallbacks = {}
   ) => {
     if (!canvas.value) return
 
-    const img = new Image()
-    img.onload = async () => {
-      try {
-        // Resize image if needed (max RESIZE_MAX_DIMENSION px on longest side)
-        const processedImg = await resizeImageIfNeeded(img)
-
-        currentImage = processedImg
-        const canvasEl = canvas.value!
-        ctx = canvasEl.getContext('2d')!
-
-        // Use processed image dimensions
-        canvasEl.width = processedImg.width
-        canvasEl.height = processedImg.height
-        imageWidth.value = processedImg.width
-        imageHeight.value = processedImg.height
-
-        ctx.drawImage(
-          processedImg,
-          0,
-          0,
-          processedImg.width,
-          processedImg.height
-        )
-        originalImageData = ctx.getImageData(
-          0,
-          0,
-          processedImg.width,
-          processedImg.height
-        )
-
-        // Update canvas metrics for optimized coordinate calculations
-        updateCanvasMetrics()
-
-        callbacks.onSuccess?.()
-      } catch {
-        callbacks.onProcessError?.()
+    if (typeof source === 'string') {
+      // Fallback decode path (data URL) - only taken when createImageBitmap
+      // isn't available (see useImageUpload.processImageFile).
+      const img = new Image()
+      img.onload = () => {
+        drawDecodedImage(img, callbacks)
       }
+      img.onerror = () => {
+        callbacks.onLoadError?.()
+      }
+      img.src = source
+      return
     }
-    img.onerror = () => {
-      callbacks.onLoadError?.()
-    }
-    img.src = imageSrc
+
+    // Fast path: already-decoded ImageBitmap, no Base64 involved.
+    drawDecodedImage(source, callbacks)
   }
 
   const redrawCanvas = (selection: SelectionArea, isSelecting: boolean) => {
-    if (!ctx || !originalImageData) return
+    if (!overlayCtx || !canvas.value) return
 
-    // Always restore the current state (which includes any edits)
-    ctx.putImageData(originalImageData, 0, 0)
+    // Only the overlay is touched here - the main canvas (and its cached
+    // originalImageData) is never written to while dragging, unlike the
+    // previous implementation which putImageData'd the full image every
+    // frame just to erase the previous selection rectangle.
+    overlayCtx.clearRect(0, 0, canvas.value.width, canvas.value.height)
 
-    // Show dashed outline only while dragging
     if (isSelecting) {
-      ctx.strokeStyle = '#ff0000'
+      overlayCtx.strokeStyle = '#ff0000'
       // Use computed line width for better performance
       const lineWidth = processingSettings.value?.lineWidth || 4
-      ctx.lineWidth = lineWidth
-      ctx.setLineDash([5, 5])
+      overlayCtx.lineWidth = lineWidth
+      overlayCtx.setLineDash([5, 5])
 
       const width = selection.endX - selection.startX
       const height = selection.endY - selection.startY
 
-      ctx.strokeRect(selection.startX, selection.startY, width, height)
-      ctx.setLineDash([])
+      overlayCtx.strokeRect(selection.startX, selection.startY, width, height)
+      overlayCtx.setLineDash([])
     }
+  }
+
+  /** Clears any selection rectangle left on the overlay canvas. */
+  const clearOverlay = () => {
+    if (!overlayCtx || !canvas.value) return
+    overlayCtx.clearRect(0, 0, canvas.value.width, canvas.value.height)
   }
 
   const resetToOriginal = () => {
@@ -183,6 +209,7 @@ export function useCanvasRenderer() {
   return {
     canvas,
     canvasContainer,
+    overlayCanvas,
     canvasMetrics,
     processingSettings,
     updateCanvasMetrics,
@@ -194,6 +221,7 @@ export function useCanvasRenderer() {
     getCurrentImage,
     loadImageToCanvas,
     redrawCanvas,
+    clearOverlay,
     resetToOriginal,
   }
 }

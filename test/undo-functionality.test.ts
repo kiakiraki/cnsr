@@ -5,7 +5,10 @@ import {
   type UndoHistoryDeps,
   type UndoEntry,
 } from '../composables/useUndoHistory'
-import { useImageProcessing } from '../composables/useImageProcessing'
+import {
+  useImageProcessing,
+  applyMosaicEffect,
+} from '../composables/useImageProcessing'
 
 // Minimal mock shape for CanvasRenderingContext2D. Using vi.fn()'s own
 // return type (rather than a cast to the real DOM type) keeps mock helpers
@@ -195,6 +198,91 @@ describe('Undo Functionality', () => {
 
       expect(undoStack.value.length).toBe(0)
       expect(canUndo.value).toBe(false)
+    })
+  })
+
+  describe('applyMosaicEffect (reads pixels from regionData, not ctx.getImageData)', () => {
+    // Builds a synthetic region ImageData whose red channel equals each
+    // pixel's flat index (localY * width + localX), so sampled colors can
+    // be checked against a hand-computed expectation.
+    const makeRegionData = (width: number, height: number): ImageData => {
+      const data = new Uint8ClampedArray(width * height * 4)
+      for (let p = 0; p < width * height; p++) {
+        data[p * 4] = p
+        data[p * 4 + 1] = 0
+        data[p * 4 + 2] = 0
+        data[p * 4 + 3] = 255
+      }
+      return { data, width, height } as unknown as ImageData
+    }
+
+    const makeTrackingCtx = () => {
+      const fillStyles: string[] = []
+      const rects: number[][] = []
+      const ctx: {
+        fillStyle: string
+        fillRect: ReturnType<typeof vi.fn>
+        getImageData: ReturnType<typeof vi.fn>
+      } = {
+        fillStyle: '',
+        fillRect: vi.fn(),
+        getImageData: vi.fn(),
+      }
+      ctx.fillRect.mockImplementation(
+        (x: number, y: number, w: number, h: number) => {
+          fillStyles.push(ctx.fillStyle)
+          rects.push([x, y, w, h])
+        }
+      )
+      return { ctx: ctx as unknown as CanvasRenderingContext2D, fillStyles, rects }
+    }
+
+    it('samples the center pixel of each block directly from regionData with zero getImageData readbacks', () => {
+      const { ctx, fillStyles, rects } = makeTrackingCtx()
+      const width = 4
+      const height = 4
+      const regionData = makeRegionData(width, height)
+
+      // startX/startY are non-zero to prove the local-coordinate conversion
+      // (sample - start) is applied correctly, not just at the origin.
+      applyMosaicEffect(ctx, regionData, 10, 20, width, height, 2)
+
+      expect(ctx.getImageData).not.toHaveBeenCalled()
+      expect(rects).toEqual([
+        [10, 20, 2, 2],
+        [12, 20, 2, 2],
+        [10, 22, 2, 2],
+        [12, 22, 2, 2],
+      ])
+      // Center-of-block sample points -> local pixel indices (localY*4+localX):
+      // (1,1)=5, (1,3)=7, (3,1)=13, (3,3)=15
+      expect(fillStyles).toEqual([
+        'rgb(5, 0, 0)',
+        'rgb(7, 0, 0)',
+        'rgb(13, 0, 0)',
+        'rgb(15, 0, 0)',
+      ])
+    })
+
+    it('clamps the sample position to the region bounds for a trailing partial block', () => {
+      const { ctx, fillStyles, rects } = makeTrackingCtx()
+      const width = 4
+      const height = 1
+      const regionData = makeRegionData(width, height)
+
+      // mosaicSize=3 over a width of 4: the second block only has 1 column
+      // left, so its natural sample (x=3 + floor(3/2)=1 -> 4) must clamp
+      // down to the last valid column (width-1=3) instead of reading out
+      // of range.
+      applyMosaicEffect(ctx, regionData, 0, 0, width, height, 3)
+
+      expect(ctx.getImageData).not.toHaveBeenCalled()
+      expect(rects).toEqual([
+        [0, 0, 3, 1],
+        [3, 0, 1, 1],
+      ])
+      // First block samples local x=1 (p=1); second clamps to local x=3 (p=3).
+      expect(fillStyles).toEqual(['rgb(1, 0, 0)', 'rgb(3, 0, 0)'])
     })
   })
 

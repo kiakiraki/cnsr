@@ -22,6 +22,8 @@ export interface UseAreaSelectionDeps {
   getCanvasRect: () => DOMRect | null
   getScale: () => { scaleX: number; scaleY: number }
   redrawCanvas: (selection: SelectionArea, isSelecting: boolean) => void
+  /** Clears any selection rectangle left drawn (on the overlay canvas). */
+  clearOverlay?: () => void
   /** Invoked with the final selection once a drag ends with a valid size. */
   onSelectionEnd?: (selection: SelectionArea) => void
 }
@@ -156,6 +158,7 @@ export function useAreaSelection(deps: UseAreaSelectionDeps) {
     selection.value.active = false
     hasSelection.value = false
     isSelecting.value = false
+    deps.clearOverlay?.()
   }
 
   onUnmounted(() => {

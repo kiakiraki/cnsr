@@ -86,7 +86,7 @@
         <button
           v-if="uploadedImage"
           class="btn btn-success"
-          :disabled="!processedImage"
+          :disabled="!hasProcessedImage"
           @click="downloadImage"
         >
           ダウンロード
@@ -94,16 +94,19 @@
       </div>
 
       <div ref="canvasContainer" class="canvas-container">
-        <canvas
-          ref="canvas"
-          class="image-canvas"
-          @mousedown="startSelection"
-          @mousemove="updateSelection"
-          @mouseup="endSelection"
-          @touchstart="startSelection"
-          @touchmove="updateSelection"
-          @touchend="endSelection"
-        />
+        <div class="canvas-stack">
+          <canvas
+            ref="canvas"
+            class="image-canvas"
+            @mousedown="startSelection"
+            @mousemove="updateSelection"
+            @mouseup="endSelection"
+            @touchstart="startSelection"
+            @touchmove="updateSelection"
+            @touchend="endSelection"
+          />
+          <canvas ref="overlayCanvas" class="selection-overlay" />
+        </div>
       </div>
     </div>
   </div>
@@ -121,6 +124,7 @@ import { generateDownloadFilename } from '~/utils/downloadFilename'
 const {
   canvas,
   canvasContainer,
+  overlayCanvas,
   processingSettings,
   updateCanvasMetrics,
   getCanvasRect,
@@ -130,6 +134,7 @@ const {
   setOriginalImageData,
   loadImageToCanvas,
   redrawCanvas,
+  clearOverlay,
   resetToOriginal: resetCanvasToOriginal,
 } = useCanvasRenderer()
 
@@ -156,8 +161,11 @@ const { processingMode, applyMosaic } = useImageProcessing({
 const handleSelectionEnd = (selection: SelectionArea) => {
   const applied = applyMosaic(selection)
   clearSelectionState()
-  if (applied && canvas.value) {
-    processedImage.value = canvas.value.toDataURL()
+  if (applied) {
+    // Just flag that the canvas now has a downloadable image - the actual
+    // (expensive, synchronous) PNG encode is deferred to downloadImage()
+    // instead of running on every single edit.
+    hasProcessedImage.value = true
   }
 }
 
@@ -169,6 +177,7 @@ const { startSelection, updateSelection, endSelection, clearSelectionState } =
     getCanvasRect,
     getScale,
     redrawCanvas,
+    clearOverlay,
     onSelectionEnd: handleSelectionEnd,
   })
 
@@ -176,7 +185,7 @@ const { startSelection, updateSelection, endSelection, clearSelectionState } =
 const {
   fileInput,
   uploadedImage,
-  processedImage,
+  hasProcessedImage,
   originalFileName,
   isDragOver,
   errorMessage,
@@ -188,13 +197,13 @@ const {
   handleDrop,
   resetImage,
 } = useImageUpload({
-  onImageReady: dataUrl => {
-    loadImageToCanvas(dataUrl, {
+  onImageReady: source => {
+    loadImageToCanvas(source, {
       onLoadError: () => {
         showError(
           '画像の読み込みに失敗しました。対応していない形式の可能性があります'
         )
-        uploadedImage.value = null
+        uploadedImage.value = false
       },
       onProcessError: () => showError('画像の処理中にエラーが発生しました'),
       onSuccess: () => clearUndoHistory(),
@@ -212,31 +221,36 @@ const handleResetToOriginal = () => {
   if (!resetCanvasToOriginal()) return
   clearUndoHistory()
   clearSelectionState()
-  if (canvas.value) {
-    processedImage.value = canvas.value.toDataURL()
-  }
+  hasProcessedImage.value = true
 }
 
 const handleUndoLastAction = () => {
   if (!undoLastAction()) return
   clearSelectionState()
-  if (canvas.value) {
-    processedImage.value = canvas.value.toDataURL()
-  }
+  hasProcessedImage.value = true
 }
 
 const downloadImage = () => {
-  if (!processedImage.value) return
+  if (!hasProcessedImage.value || !canvas.value) return
 
   const filename = generateDownloadFilename(
     originalFileName.value,
     processingMode.value
   )
 
-  const link = document.createElement('a')
-  link.download = filename
-  link.href = processedImage.value
-  link.click()
+  // Encode to PNG only now (once, on demand) via toBlob - which encodes
+  // off the main thread in supporting browsers - rather than the
+  // synchronous toDataURL() this used to run after every single edit.
+  canvas.value.toBlob(blob => {
+    if (!blob) return
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.download = filename
+    link.href = url
+    link.click()
+    // ダウンロード開始前にBlob URLが無効化されるブラウザがあるため遅延解放
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }, 'image/png')
 }
 </script>
 
@@ -438,13 +452,37 @@ const downloadImage = () => {
   overflow: auto;
 }
 
-.image-canvas {
-  max-width: 100%;
-  height: auto;
+/* Shrink-wraps its content (the main canvas), so the absolutely-positioned
+ * overlay canvas below can size itself to exactly match the main canvas's
+ * rendered box via width/height: 100%. */
+.canvas-stack {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+  /* borderはstack側に付ける: canvasに付けるとオーバーレイ(100%幅)が
+   * border込みの箱に伸ばされ、選択矩形の表示が微妙にズレるため */
   border: 1px solid #ddd;
   border-radius: 5px;
+  overflow: hidden;
+}
+
+.image-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
   cursor: crosshair;
   touch-action: none;
+}
+
+/* Drag-selection rectangle is drawn here instead of on the main canvas, so
+ * dragging never needs to putImageData the full image every frame. */
+.selection-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 @media (max-width: 768px) {
@@ -512,7 +550,7 @@ const downloadImage = () => {
     background-color: #2d2d2d;
   }
 
-  .image-canvas {
+  .canvas-stack {
     border-color: #555;
   }
 }

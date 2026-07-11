@@ -138,6 +138,23 @@ describe('State Management', () => {
       expect(s.isSelecting.value).toBe(false)
     })
 
+    it('should clear the overlay (not the main canvas) when clearing selection state', () => {
+      const clearOverlay = vi.fn()
+      const s = useAreaSelection({ ...deps, clearOverlay })
+      s.startSelection(down(100, 100))
+
+      s.clearSelectionState()
+
+      expect(clearOverlay).toHaveBeenCalledTimes(1)
+    })
+
+    it('should tolerate a missing clearOverlay dependency', () => {
+      const s = useAreaSelection(deps) // deps has no clearOverlay
+      s.startSelection(down(100, 100))
+
+      expect(() => s.clearSelectionState()).not.toThrow()
+    })
+
     it('should handle complete selection lifecycle', () => {
       const s = useAreaSelection(deps)
 
@@ -192,9 +209,9 @@ describe('State Management', () => {
 
   describe('Image State Management', () => {
     it('should initialize with no images', () => {
-      const { uploadedImage, processedImage } = useImageUpload()
-      expect(uploadedImage.value).toBeNull()
-      expect(processedImage.value).toBeNull()
+      const { uploadedImage, hasProcessedImage } = useImageUpload()
+      expect(uploadedImage.value).toBe(false)
+      expect(hasProcessedImage.value).toBe(false)
     })
 
     it('should record the original filename via processImageFile', () => {
@@ -203,23 +220,27 @@ describe('State Management', () => {
 
       processImageFile(file)
 
-      // originalFileName is set synchronously; uploadedImage itself is only
-      // populated once FileReader's onload fires (exercised in
+      // originalFileName is set synchronously; uploadedImage itself only
+      // flips to true once the image finishes decoding (exercised in
       // download-functionality.test.ts via the mocked FileReader).
       expect(originalFileName.value).toBe('photo.png')
     })
 
     it('should reset images via resetImage', () => {
-      const { uploadedImage, processedImage, originalFileName, resetImage } =
-        useImageUpload()
-      uploadedImage.value = 'data:image/png;base64,fake-data'
-      processedImage.value = 'data:image/png;base64,processed-data'
+      const {
+        uploadedImage,
+        hasProcessedImage,
+        originalFileName,
+        resetImage,
+      } = useImageUpload()
+      uploadedImage.value = true
+      hasProcessedImage.value = true
       originalFileName.value = 'photo.png'
 
       resetImage()
 
-      expect(uploadedImage.value).toBeNull()
-      expect(processedImage.value).toBeNull()
+      expect(uploadedImage.value).toBe(false)
+      expect(hasProcessedImage.value).toBe(false)
       expect(originalFileName.value).toBe('')
     })
   })

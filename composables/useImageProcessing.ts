@@ -41,14 +41,27 @@ const applyWhitefill = (
   ctx.fillRect(startX, startY, width, height)
 }
 
-const applyMosaicEffect = (
+/**
+ * Paints the mosaic effect onto `ctx` by sampling each block's color from
+ * `regionData` - the ImageData for exactly [startX, startY, width, height]
+ * that the caller already captured for the undo stack - instead of issuing
+ * a `ctx.getImageData(sampleX, sampleY, 1, 1)` readback per block. A 500px
+ * selection at typical mosaicSize used to trigger ~440 synchronous
+ * GPU->CPU readbacks; this reduces that to zero (one readback total,
+ * shared with the undo snapshot). Sampling position and clamping are
+ * unchanged from the original per-pixel implementation.
+ */
+export const applyMosaicEffect = (
   ctx: CanvasRenderingContext2D,
+  regionData: ImageData,
   startX: number,
   startY: number,
   width: number,
   height: number,
   mosaicSize: number
 ) => {
+  const { data } = regionData
+
   for (let y = 0; y < height; y += mosaicSize) {
     for (let x = 0; x < width; x += mosaicSize) {
       // Get a sample pixel from the center of each block
@@ -61,12 +74,14 @@ const applyMosaicEffect = (
         startY + height - 1
       )
 
-      // Get the color data of the sample pixel
-      const imageData = ctx.getImageData(sampleX, sampleY, 1, 1)
-      const pixelData = imageData.data
-      const r = pixelData[0]
-      const g = pixelData[1]
-      const b = pixelData[2]
+      // Read the sample pixel directly out of the already-captured region
+      // data (local coordinates relative to the region's top-left corner).
+      const localX = sampleX - startX
+      const localY = sampleY - startY
+      const pixelIndex = (localY * width + localX) * 4
+      const r = data[pixelIndex]
+      const g = data[pixelIndex + 1]
+      const b = data[pixelIndex + 2]
 
       // Fill the block with the sampled color
       ctx.fillStyle = `rgb(${r}, ${g}, ${b})`
@@ -77,6 +92,15 @@ const applyMosaicEffect = (
   }
 }
 
+/**
+ * Applies a blur to the selected region only. Rather than re-drawing the
+ * *entire* canvas through a blur filter (the previous implementation),
+ * only a small margin-padded crop around the selection is copied into a
+ * scratch canvas and blurred - the amount of work scales with the
+ * selection size instead of the whole image. The margin (2x blurRadius)
+ * gives the blur kernel enough surrounding pixels to reproduce the same
+ * edge softening as the full-canvas version.
+ */
 const applyBlur = (
   ctx: CanvasRenderingContext2D,
   canvasEl: HTMLCanvasElement,
@@ -86,6 +110,35 @@ const applyBlur = (
   height: number,
   blurRadius: number
 ) => {
+  const margin = blurRadius * 2
+  const srcX = Math.max(0, startX - margin)
+  const srcY = Math.max(0, startY - margin)
+  const srcRight = Math.min(canvasEl.width, startX + width + margin)
+  const srcBottom = Math.min(canvasEl.height, startY + height + margin)
+  const srcWidth = srcRight - srcX
+  const srcHeight = srcBottom - srcY
+
+  if (srcWidth <= 0 || srcHeight <= 0) return
+
+  // Crop just the margin-padded source region (not the whole canvas) into
+  // a scratch canvas that will be drawn back through the blur filter.
+  const scratch = document.createElement('canvas')
+  scratch.width = srcWidth
+  scratch.height = srcHeight
+  const scratchCtx = scratch.getContext('2d')
+  if (!scratchCtx) return
+  scratchCtx.drawImage(
+    canvasEl,
+    srcX,
+    srcY,
+    srcWidth,
+    srcHeight,
+    0,
+    0,
+    srcWidth,
+    srcHeight
+  )
+
   // Save current context state
   ctx.save()
 
@@ -94,9 +147,10 @@ const applyBlur = (
   ctx.rect(startX, startY, width, height)
   ctx.clip()
 
-  // Apply blur filter and redraw the entire canvas within clipped region
+  // Apply blur filter and redraw just the cropped scratch region, aligned
+  // back to its original position, within the clipped selection.
   ctx.filter = `blur(${blurRadius}px)`
-  ctx.drawImage(canvasEl, 0, 0)
+  ctx.drawImage(scratch, srcX, srcY)
 
   // Restore context state (removes clip and filter)
   ctx.restore()
@@ -142,6 +196,7 @@ export function useImageProcessing(deps: UseImageProcessingDeps) {
       case 'mosaic':
         applyMosaicEffect(
           ctx,
+          regionData,
           startX,
           startY,
           width,
