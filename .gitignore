@@ -25,3 +25,4 @@ logs
 
 # Serena MCP cache files
 .serena/cache/
+coverage

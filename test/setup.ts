@@ -29,30 +29,54 @@ const mockCanvas = {
 }
 
 // Mock HTML Canvas Element
-global.HTMLCanvasElement = vi.fn(
+globalThis.HTMLCanvasElement = vi.fn(
   () => mockCanvas
 ) as unknown as typeof HTMLCanvasElement
 
-// Mock FileReader
-global.FileReader = vi.fn(() => ({
-  readAsDataURL: vi.fn(),
-  result: 'data:image/png;base64,fake-image-data',
-  onload: null,
-})) as unknown as typeof FileReader
+// Mock FileReader. Must be a real constructor function (not vi.fn(() =>
+// ...), which cannot be invoked with `new`) so composables that do
+// `new FileReader()` keep working. readAsDataURL asynchronously invokes
+// onload on the next macrotask, mirroring the real API's async behavior.
+class MockFileReader {
+  result: string | ArrayBuffer | null = null
+  onload: ((event: { target: { result: string | null } }) => void) | null = null
+  onerror: (() => void) | null = null
 
-// Mock Image
-global.Image = vi.fn(() => ({
-  src: '',
-  onload: null,
-  width: 100,
-  height: 100,
-})) as unknown as typeof Image
+  readAsDataURL(_file: Blob) {
+    this.result = 'data:image/png;base64,fake-image-data'
+    setTimeout(() => {
+      this.onload?.({ target: { result: this.result as string } })
+    }, 0)
+  }
+}
+globalThis.FileReader = MockFileReader as unknown as typeof FileReader
+
+// Mock Image. Also a real constructor function for the same reason as
+// FileReader above. Setting `.src` asynchronously fires onload so code
+// using `new Image()` + img.onload keeps working under test.
+class MockImage {
+  width = 100
+  height = 100
+  onload: (() => void) | null = null
+  onerror: (() => void) | null = null
+  private _src = ''
+
+  get src(): string {
+    return this._src
+  }
+
+  set src(value: string) {
+    this._src = value
+    setTimeout(() => this.onload?.(), 0)
+  }
+}
+globalThis.Image = MockImage as unknown as typeof Image
 
 // Mock URL.createObjectURL
-global.URL.createObjectURL = vi.fn(() => 'blob:fake-url')
+globalThis.URL.createObjectURL = vi.fn(() => 'blob:fake-url')
 
 // Mock Touch API
-global.Touch = class Touch {
+globalThis.Touch = class Touch {
   identifier: number
   target: EventTarget
   clientX: number
@@ -83,7 +107,7 @@ global.Touch = class Touch {
 } as unknown as typeof Touch
 
 // Mock TouchEvent
-global.TouchEvent = class TouchEvent extends Event {
+globalThis.TouchEvent = class TouchEvent extends Event {
   touches: TouchList
   targetTouches: TouchList
   changedTouches: TouchList
@@ -95,6 +119,25 @@ global.TouchEvent = class TouchEvent extends Event {
     this.changedTouches = (init.changedTouches || []) as unknown as TouchList
   }
 } as unknown as typeof TouchEvent
+
+// Mock requestAnimationFrame/cancelAnimationFrame (jsdom does not implement
+// these). The callback is scheduled on a real macrotask so tests that need
+// to observe its effect can simply `await` a short delay.
+globalThis.requestAnimationFrame = vi.fn(
+  (callback: FrameRequestCallback): number => {
+    return setTimeout(() => callback(Date.now()), 0) as unknown as number
+  }
+)
+globalThis.cancelAnimationFrame = vi.fn((handle: number) => {
+  clearTimeout(handle)
+})
+
+// Mock ResizeObserver (jsdom does not implement it either)
+globalThis.ResizeObserver = vi.fn().mockImplementation(() => ({
+  observe: vi.fn(),
+  unobserve: vi.fn(),
+  disconnect: vi.fn(),
+})) as unknown as typeof ResizeObserver
 
 // Mock document.createElement for download links
 const mockElement = {

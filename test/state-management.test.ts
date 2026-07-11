@@ -1,170 +1,206 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
+import {
+  useAreaSelection,
+  type UseAreaSelectionDeps,
+} from '../composables/useAreaSelection'
+import { useImageProcessing } from '../composables/useImageProcessing'
+import { useImageUpload } from '../composables/useImageUpload'
+import { useUndoHistory } from '../composables/useUndoHistory'
 
 describe('State Management', () => {
   describe('Selection State Lifecycle', () => {
-    let hasSelection: { value: boolean }
-    let isSelecting: { value: boolean }
-    let selection: {
-      value: {
-        startX: number
-        startY: number
-        endX: number
-        endY: number
-        active: boolean
-      }
-    }
+    let deps: UseAreaSelectionDeps
+    let mockRect: DOMRect
 
     beforeEach(() => {
-      hasSelection = ref(false)
-      isSelecting = ref(false)
-      selection = ref({
-        startX: 0,
-        startY: 0,
-        endX: 0,
-        endY: 0,
-        active: false,
-      })
+      mockRect = {
+        left: 0,
+        top: 0,
+        width: 400,
+        height: 300,
+        x: 0,
+        y: 0,
+        bottom: 300,
+        right: 400,
+        toJSON: () => ({}),
+      }
+      deps = {
+        canvas: ref({ width: 400, height: 300 } as HTMLCanvasElement),
+        updateCanvasMetrics: vi.fn(),
+        getCanvasRect: () => mockRect,
+        getScale: () => ({ scaleX: 1, scaleY: 1 }),
+        redrawCanvas: vi.fn(),
+      }
     })
 
-    const startSelection = (x: number, y: number) => {
-      selection.value = {
-        startX: x,
-        startY: y,
-        endX: x,
-        endY: y,
-        active: true,
-      }
-      isSelecting.value = true
-      hasSelection.value = false
-    }
-
-    const updateSelection = (x: number, y: number) => {
-      if (!isSelecting.value) return
-      selection.value.endX = x
-      selection.value.endY = y
-    }
-
-    const endSelection = () => {
-      if (!isSelecting.value) return
-      isSelecting.value = false
-      hasSelection.value =
-        Math.abs(selection.value.endX - selection.value.startX) > 5 &&
-        Math.abs(selection.value.endY - selection.value.startY) > 5
-    }
-
-    const resetSelection = () => {
-      selection.value.active = false
-      hasSelection.value = false
-      isSelecting.value = false
-    }
+    const down = (x: number, y: number) =>
+      new MouseEvent('mousedown', { clientX: x, clientY: y })
+    const move = (x: number, y: number) =>
+      new MouseEvent('mousemove', { clientX: x, clientY: y })
+    const up = () => new MouseEvent('mouseup')
 
     it('should start selection correctly', () => {
-      startSelection(100, 100)
+      const s = useAreaSelection(deps)
+      s.startSelection(down(100, 100))
 
-      expect(selection.value.startX).toBe(100)
-      expect(selection.value.startY).toBe(100)
-      expect(selection.value.endX).toBe(100)
-      expect(selection.value.endY).toBe(100)
-      expect(selection.value.active).toBe(true)
-      expect(isSelecting.value).toBe(true)
-      expect(hasSelection.value).toBe(false)
+      expect(s.selection.value.startX).toBe(100)
+      expect(s.selection.value.startY).toBe(100)
+      expect(s.selection.value.endX).toBe(100)
+      expect(s.selection.value.endY).toBe(100)
+      expect(s.selection.value.active).toBe(true)
+      expect(s.isSelecting.value).toBe(true)
+      expect(s.hasSelection.value).toBe(false)
     })
 
-    it('should update selection coordinates during drag', () => {
-      startSelection(100, 100)
-      updateSelection(150, 150)
+    it('should update selection coordinates during drag', async () => {
+      const s = useAreaSelection(deps)
+      s.startSelection(down(100, 100))
+      s.updateSelection(move(150, 150))
+      // updateSelection schedules its work via requestAnimationFrame
+      await new Promise(resolve => setTimeout(resolve, 20))
 
-      expect(selection.value.startX).toBe(100)
-      expect(selection.value.startY).toBe(100)
-      expect(selection.value.endX).toBe(150)
-      expect(selection.value.endY).toBe(150)
-      expect(isSelecting.value).toBe(true)
+      expect(s.selection.value.startX).toBe(100)
+      expect(s.selection.value.startY).toBe(100)
+      expect(s.selection.value.endX).toBe(150)
+      expect(s.selection.value.endY).toBe(150)
+      expect(s.isSelecting.value).toBe(true)
+      expect(deps.redrawCanvas).toHaveBeenCalled()
     })
 
-    it('should not update selection when not selecting', () => {
-      updateSelection(150, 150)
+    it('should not update selection when not selecting', async () => {
+      const s = useAreaSelection(deps)
+      s.updateSelection(move(150, 150))
+      await new Promise(resolve => setTimeout(resolve, 20))
 
-      expect(selection.value.endX).toBe(0)
-      expect(selection.value.endY).toBe(0)
+      expect(s.selection.value.endX).toBe(0)
+      expect(s.selection.value.endY).toBe(0)
     })
 
     it('should end selection with valid size', () => {
-      startSelection(100, 100)
-      updateSelection(120, 120)
-      endSelection()
+      const s = useAreaSelection(deps)
+      s.startSelection(down(100, 100))
+      s.selection.value.endX = 120
+      s.selection.value.endY = 120
+      s.endSelection(up())
 
-      expect(isSelecting.value).toBe(false)
-      expect(hasSelection.value).toBe(true)
+      expect(s.isSelecting.value).toBe(false)
+      expect(s.hasSelection.value).toBe(true)
     })
 
     it('should end selection with invalid size', () => {
-      startSelection(100, 100)
-      updateSelection(103, 103)
-      endSelection()
+      const s = useAreaSelection(deps)
+      s.startSelection(down(100, 100))
+      s.selection.value.endX = 103
+      s.selection.value.endY = 103
+      s.endSelection(up())
 
-      expect(isSelecting.value).toBe(false)
-      expect(hasSelection.value).toBe(false)
+      expect(s.isSelecting.value).toBe(false)
+      expect(s.hasSelection.value).toBe(false)
     })
 
     it('should not end selection if not selecting', () => {
-      endSelection()
+      const s = useAreaSelection(deps)
+      s.endSelection(up())
 
-      expect(isSelecting.value).toBe(false)
-      expect(hasSelection.value).toBe(false)
+      expect(s.isSelecting.value).toBe(false)
+      expect(s.hasSelection.value).toBe(false)
     })
 
-    it('should reset selection state', () => {
-      startSelection(100, 100)
-      updateSelection(150, 150)
-      endSelection()
-      resetSelection()
+    it('should invoke onSelectionEnd only for a valid selection', () => {
+      const onSelectionEnd = vi.fn()
+      const s = useAreaSelection({ ...deps, onSelectionEnd })
 
-      expect(selection.value.active).toBe(false)
-      expect(hasSelection.value).toBe(false)
-      expect(isSelecting.value).toBe(false)
+      s.startSelection(down(100, 100))
+      s.selection.value.endX = 103
+      s.selection.value.endY = 103
+      s.endSelection(up())
+      expect(onSelectionEnd).not.toHaveBeenCalled()
+
+      s.startSelection(down(100, 100))
+      s.selection.value.endX = 150
+      s.selection.value.endY = 150
+      s.endSelection(up())
+      expect(onSelectionEnd).toHaveBeenCalledTimes(1)
+      expect(onSelectionEnd).toHaveBeenCalledWith(s.selection.value)
+    })
+
+    it('should reset selection state via clearSelectionState', () => {
+      const s = useAreaSelection(deps)
+      s.startSelection(down(100, 100))
+      s.selection.value.endX = 150
+      s.selection.value.endY = 150
+      s.endSelection(up())
+      s.clearSelectionState()
+
+      expect(s.selection.value.active).toBe(false)
+      expect(s.hasSelection.value).toBe(false)
+      expect(s.isSelecting.value).toBe(false)
+    })
+
+    it('should clear the overlay (not the main canvas) when clearing selection state', () => {
+      const clearOverlay = vi.fn()
+      const s = useAreaSelection({ ...deps, clearOverlay })
+      s.startSelection(down(100, 100))
+
+      s.clearSelectionState()
+
+      expect(clearOverlay).toHaveBeenCalledTimes(1)
+    })
+
+    it('should tolerate a missing clearOverlay dependency', () => {
+      const s = useAreaSelection(deps) // deps has no clearOverlay
+      s.startSelection(down(100, 100))
+
+      expect(() => s.clearSelectionState()).not.toThrow()
     })
 
     it('should handle complete selection lifecycle', () => {
-      // Start selection
-      startSelection(100, 100)
-      expect(isSelecting.value).toBe(true)
-      expect(hasSelection.value).toBe(false)
+      const s = useAreaSelection(deps)
 
-      // Update selection
-      updateSelection(150, 150)
-      expect(selection.value.endX).toBe(150)
-      expect(selection.value.endY).toBe(150)
+      s.startSelection(down(100, 100))
+      expect(s.isSelecting.value).toBe(true)
+      expect(s.hasSelection.value).toBe(false)
 
-      // End selection
-      endSelection()
-      expect(isSelecting.value).toBe(false)
-      expect(hasSelection.value).toBe(true)
+      s.selection.value.endX = 150
+      s.selection.value.endY = 150
+      expect(s.selection.value.endX).toBe(150)
+      expect(s.selection.value.endY).toBe(150)
 
-      // Reset selection
-      resetSelection()
-      expect(selection.value.active).toBe(false)
-      expect(hasSelection.value).toBe(false)
+      s.endSelection(up())
+      expect(s.isSelecting.value).toBe(false)
+      expect(s.hasSelection.value).toBe(true)
+
+      s.clearSelectionState()
+      expect(s.selection.value.active).toBe(false)
+      expect(s.hasSelection.value).toBe(false)
     })
   })
 
   describe('Processing Mode State', () => {
-    let processingMode: { value: 'blackfill' | 'mosaic' }
-
-    beforeEach(() => {
-      processingMode = ref<'blackfill' | 'mosaic'>('blackfill')
-    })
+    const makeImageProcessing = () =>
+      useImageProcessing({
+        getCtx: () => null,
+        getOriginalImageData: () => null,
+        setOriginalImageData: vi.fn(),
+        getCanvas: () => undefined,
+        getProcessingSettings: () => null,
+        pushUndoEntry: vi.fn(),
+      })
 
     it('should initialize with blackfill mode', () => {
+      const { processingMode } = makeImageProcessing()
       expect(processingMode.value).toBe('blackfill')
     })
 
     it('should switch to mosaic mode', () => {
+      const { processingMode } = makeImageProcessing()
       processingMode.value = 'mosaic'
       expect(processingMode.value).toBe('mosaic')
     })
 
     it('should switch back to blackfill mode', () => {
+      const { processingMode } = makeImageProcessing()
       processingMode.value = 'mosaic'
       processingMode.value = 'blackfill'
       expect(processingMode.value).toBe('blackfill')
@@ -172,160 +208,126 @@ describe('State Management', () => {
   })
 
   describe('Image State Management', () => {
-    let uploadedImage: { value: string | null }
-    let processedImage: { value: string | null }
-
-    beforeEach(() => {
-      uploadedImage = ref<string | null>(null)
-      processedImage = ref<string | null>(null)
-    })
-
     it('should initialize with no images', () => {
-      expect(uploadedImage.value).toBeNull()
-      expect(processedImage.value).toBeNull()
+      const { uploadedImage, hasProcessedImage } = useImageUpload()
+      expect(uploadedImage.value).toBe(false)
+      expect(hasProcessedImage.value).toBe(false)
     })
 
-    it('should set uploaded image', () => {
-      const imageData = 'data:image/png;base64,fake-data'
-      uploadedImage.value = imageData
-      expect(uploadedImage.value).toBe(imageData)
+    it('should record the original filename via processImageFile', () => {
+      const { originalFileName, processImageFile } = useImageUpload()
+      const file = new File(['fake'], 'photo.png', { type: 'image/png' })
+
+      processImageFile(file)
+
+      // originalFileName is set synchronously; uploadedImage itself only
+      // flips to true once the image finishes decoding (exercised in
+      // download-functionality.test.ts via the mocked FileReader).
+      expect(originalFileName.value).toBe('photo.png')
     })
 
-    it('should set processed image', () => {
-      const imageData = 'data:image/png;base64,processed-data'
-      processedImage.value = imageData
-      expect(processedImage.value).toBe(imageData)
-    })
+    it('should reset images via resetImage', () => {
+      const { uploadedImage, hasProcessedImage, originalFileName, resetImage } =
+        useImageUpload()
+      uploadedImage.value = true
+      hasProcessedImage.value = true
+      originalFileName.value = 'photo.png'
 
-    it('should reset images', () => {
-      uploadedImage.value = 'data:image/png;base64,fake-data'
-      processedImage.value = 'data:image/png;base64,processed-data'
+      resetImage()
 
-      uploadedImage.value = null
-      processedImage.value = null
-
-      expect(uploadedImage.value).toBeNull()
-      expect(processedImage.value).toBeNull()
+      expect(uploadedImage.value).toBe(false)
+      expect(hasProcessedImage.value).toBe(false)
+      expect(originalFileName.value).toBe('')
     })
   })
 
   describe('Undo State Management', () => {
-    let canUndo: { value: boolean }
-    let undoStack: { value: Array<{ data: string }> }
-    const MAX_UNDO_LEVELS = 64
+    const makeUndoHistory = (canvasSize = { width: 800, height: 600 }) => {
+      const ctx = {
+        putImageData: vi.fn(),
+        getImageData: vi.fn(
+          () => ({ data: new Uint8ClampedArray(4) }) as unknown as ImageData
+        ),
+      } as unknown as CanvasRenderingContext2D
+      const setOriginalImageData = vi.fn()
+      const undoHistory = useUndoHistory({
+        getCtx: () => ctx,
+        getCanvas: () => canvasSize as unknown as HTMLCanvasElement,
+        setOriginalImageData,
+      })
+      return { ctx, setOriginalImageData, ...undoHistory }
+    }
 
-    beforeEach(() => {
-      canUndo = ref(false)
-      undoStack = ref<Array<{ data: string }>>([])
+    const fakeEntry = (n: number) => ({
+      imageData: { data: new Uint8ClampedArray([n]) } as unknown as ImageData,
+      x: n,
+      y: n,
     })
 
-    const addToUndoStack = (imageData: { data: string }) => {
-      undoStack.value.push(imageData)
-      if (undoStack.value.length > MAX_UNDO_LEVELS) {
-        undoStack.value.shift()
-      }
-      canUndo.value = undoStack.value.length > 0
-    }
-
-    const undo = () => {
-      if (undoStack.value.length <= 0) return null
-      const previousState = undoStack.value.pop()
-      canUndo.value = undoStack.value.length > 0
-      return previousState
-    }
-
-    const resetUndoStack = () => {
-      undoStack.value = []
-      canUndo.value = false
-    }
-
     it('should initialize with no undo available', () => {
+      const { canUndo, undoStack } = makeUndoHistory()
       expect(canUndo.value).toBe(false)
       expect(undoStack.value.length).toBe(0)
     })
 
     it('should add to undo stack and enable undo', () => {
-      const mockImageData = { data: 'fake-image-data' }
-      addToUndoStack(mockImageData)
+      const { canUndo, undoStack, pushUndoEntry } = makeUndoHistory()
+      pushUndoEntry(fakeEntry(1))
 
       expect(undoStack.value.length).toBe(1)
       expect(canUndo.value).toBe(true)
     })
 
     it('should maintain undo stack size limit', () => {
-      // Add more than MAX_UNDO_LEVELS
-      for (let i = 0; i < MAX_UNDO_LEVELS + 10; i++) {
-        addToUndoStack({ data: `fake-image-data-${i}` })
+      const { canUndo, undoStack, pushUndoEntry } = makeUndoHistory()
+      for (let i = 0; i < 64 + 10; i++) {
+        pushUndoEntry(fakeEntry(i))
       }
 
-      expect(undoStack.value.length).toBe(MAX_UNDO_LEVELS)
+      expect(undoStack.value.length).toBe(64)
       expect(canUndo.value).toBe(true)
+      // Oldest entries should have been dropped, newest retained
+      expect(undoStack.value[undoStack.value.length - 1]!.x).toBe(73)
     })
 
-    it('should undo and return previous state', () => {
-      const mockImageData1 = { data: 'fake-image-data-1' }
-      const mockImageData2 = { data: 'fake-image-data-2' }
+    it('should undo and disable undo once the stack is empty', () => {
+      const { canUndo, undoStack, pushUndoEntry, undoLastAction } =
+        makeUndoHistory()
+      pushUndoEntry(fakeEntry(1))
+      pushUndoEntry(fakeEntry(2))
 
-      addToUndoStack(mockImageData1)
-      addToUndoStack(mockImageData2)
-
-      const undoResult = undo()
-      expect(undoResult).toEqual(mockImageData2)
-      expect(undoStack.value.length).toBe(1)
-      expect(canUndo.value).toBe(true)
-    })
-
-    it('should disable undo when stack is empty', () => {
-      const mockImageData = { data: 'fake-image-data' }
-      addToUndoStack(mockImageData)
-
-      undo()
-      expect(undoStack.value.length).toBe(0)
-      expect(canUndo.value).toBe(false)
-    })
-
-    it('should return null when trying to undo empty stack', () => {
-      const undoResult = undo()
-      expect(undoResult).toBeNull()
-      expect(canUndo.value).toBe(false)
-    })
-
-    it('should reset undo stack', () => {
-      addToUndoStack({ data: 'fake-image-data-1' })
-      addToUndoStack({ data: 'fake-image-data-2' })
-
-      resetUndoStack()
-
-      expect(undoStack.value.length).toBe(0)
-      expect(canUndo.value).toBe(false)
-    })
-
-    it('should handle multiple undo operations', () => {
-      const mockImageData1 = { data: 'fake-image-data-1' }
-      const mockImageData2 = { data: 'fake-image-data-2' }
-      const mockImageData3 = { data: 'fake-image-data-3' }
-
-      addToUndoStack(mockImageData1)
-      addToUndoStack(mockImageData2)
-      addToUndoStack(mockImageData3)
-
-      expect(undoStack.value.length).toBe(3)
-      expect(canUndo.value).toBe(true)
-
-      const undo1 = undo()
-      expect(undo1).toEqual(mockImageData3)
-      expect(undoStack.value.length).toBe(2)
-      expect(canUndo.value).toBe(true)
-
-      const undo2 = undo()
-      expect(undo2).toEqual(mockImageData2)
+      expect(undoLastAction()).toBe(true)
       expect(undoStack.value.length).toBe(1)
       expect(canUndo.value).toBe(true)
 
-      const undo3 = undo()
-      expect(undo3).toEqual(mockImageData1)
+      expect(undoLastAction()).toBe(true)
       expect(undoStack.value.length).toBe(0)
       expect(canUndo.value).toBe(false)
+    })
+
+    it('should return false when trying to undo an empty stack', () => {
+      const { undoLastAction, canUndo } = makeUndoHistory()
+      expect(undoLastAction()).toBe(false)
+      expect(canUndo.value).toBe(false)
+    })
+
+    it('should reset undo stack via clearUndoHistory', () => {
+      const { canUndo, undoStack, pushUndoEntry, clearUndoHistory } =
+        makeUndoHistory()
+      pushUndoEntry(fakeEntry(1))
+      pushUndoEntry(fakeEntry(2))
+
+      clearUndoHistory()
+
+      expect(undoStack.value.length).toBe(0)
+      expect(canUndo.value).toBe(false)
+    })
+
+    it('should replace the undoStack array reference on every mutation (immutable updates)', () => {
+      const { undoStack, pushUndoEntry } = makeUndoHistory()
+      const before = undoStack.value
+      pushUndoEntry(fakeEntry(1))
+      expect(undoStack.value).not.toBe(before)
     })
   })
 })
