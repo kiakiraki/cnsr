@@ -39,8 +39,7 @@ globalThis.HTMLCanvasElement = vi.fn(
 // onload on the next macrotask, mirroring the real API's async behavior.
 class MockFileReader {
   result: string | ArrayBuffer | null = null
-  onload: ((event: { target: { result: string | null } }) => void) | null =
-    null
+  onload: ((event: { target: { result: string | null } }) => void) | null = null
   onerror: (() => void) | null = null
 
   readAsDataURL(_file: Blob) {

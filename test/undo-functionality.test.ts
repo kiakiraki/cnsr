@@ -21,7 +21,9 @@ type MockCtx = {
 }
 
 const makeImageData = (tag: number): ImageData =>
-  ({ data: new Uint8ClampedArray([tag, tag, tag, 255]) }) as unknown as ImageData
+  ({
+    data: new Uint8ClampedArray([tag, tag, tag, 255]),
+  }) as unknown as ImageData
 
 describe('Undo Functionality', () => {
   let mockCtx: MockCtx
@@ -234,7 +236,11 @@ describe('Undo Functionality', () => {
           rects.push([x, y, w, h])
         }
       )
-      return { ctx: ctx as unknown as CanvasRenderingContext2D, fillStyles, rects }
+      return {
+        ctx: ctx as unknown as CanvasRenderingContext2D,
+        fillStyles,
+        rects,
+      }
     }
 
     it('samples the center pixel of each block directly from regionData with zero getImageData readbacks', () => {

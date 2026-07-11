@@ -47,9 +47,7 @@ describe('Download Functionality', () => {
     })
 
     it('should use fallback filename when original is empty', () => {
-      expect(generateDownloadFilename('', 'mosaic')).toBe(
-        'processed-image.png'
-      )
+      expect(generateDownloadFilename('', 'mosaic')).toBe('processed-image.png')
     })
 
     it('should handle very long filenames', () => {
@@ -71,9 +69,7 @@ describe('Download Functionality', () => {
 
   describe('Edge Cases', () => {
     it('should handle empty original filename', () => {
-      expect(generateDownloadFilename('', 'mosaic')).toBe(
-        'processed-image.png'
-      )
+      expect(generateDownloadFilename('', 'mosaic')).toBe('processed-image.png')
     })
 
     it('should handle filename that is only extension', () => {
@@ -89,21 +85,19 @@ describe('Download Functionality', () => {
     })
 
     it('should handle filename with no extension but containing dots', () => {
-      expect(
-        generateDownloadFilename('file.name.no.ext', 'whitefill')
-      ).toBe('file.name.no-whitefill.png')
-    })
-
-    it('should handle single character filename', () => {
-      expect(generateDownloadFilename('a.jpg', 'mosaic')).toBe(
-        'a-mosaic.png'
+      expect(generateDownloadFilename('file.name.no.ext', 'whitefill')).toBe(
+        'file.name.no-whitefill.png'
       )
     })
 
+    it('should handle single character filename', () => {
+      expect(generateDownloadFilename('a.jpg', 'mosaic')).toBe('a-mosaic.png')
+    })
+
     it('should handle unicode characters in filename', () => {
-      expect(
-        generateDownloadFilename('画像ファイル.jpg', 'blackfill')
-      ).toBe('画像ファイル-blackfill.png')
+      expect(generateDownloadFilename('画像ファイル.jpg', 'blackfill')).toBe(
+        '画像ファイル-blackfill.png'
+      )
     })
 
     it('should fall back to "-blur" suffix for an unrecognized mode', () => {

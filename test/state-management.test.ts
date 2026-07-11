@@ -227,12 +227,8 @@ describe('State Management', () => {
     })
 
     it('should reset images via resetImage', () => {
-      const {
-        uploadedImage,
-        hasProcessedImage,
-        originalFileName,
-        resetImage,
-      } = useImageUpload()
+      const { uploadedImage, hasProcessedImage, originalFileName, resetImage } =
+        useImageUpload()
       uploadedImage.value = true
       hasProcessedImage.value = true
       originalFileName.value = 'photo.png'
